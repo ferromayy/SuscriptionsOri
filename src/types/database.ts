@@ -27,30 +27,81 @@ export type SubscriptionStatus =
 export interface Database {
   public: {
     Tables: {
-      profiles: {
+      users: {
         Row: {
           id: string;
           email: string;
+          password_hash: string;
           full_name: string | null;
-          avatar_url: string | null;
+          email_verified_at: string | null;
           created_at: string;
           updated_at: string;
         };
         Insert: {
-          id: string;
+          id?: string;
           email: string;
+          password_hash: string;
           full_name?: string | null;
-          avatar_url?: string | null;
+          email_verified_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           id?: string;
           email?: string;
+          password_hash?: string;
           full_name?: string | null;
-          avatar_url?: string | null;
+          email_verified_at?: string | null;
           created_at?: string;
           updated_at?: string;
+        };
+        Relationships: [];
+      };
+      email_verification_tokens: {
+        Row: {
+          id: string;
+          user_id: string;
+          code_hash: string;
+          expires_at: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          code_hash: string;
+          expires_at: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          code_hash?: string;
+          expires_at?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      sessions: {
+        Row: {
+          id: string;
+          user_id: string;
+          token_hash: string;
+          expires_at: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          token_hash: string;
+          expires_at: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          token_hash?: string;
+          expires_at?: string;
+          created_at?: string;
         };
         Relationships: [];
       };
@@ -105,6 +156,7 @@ export interface Database {
           tenant_id: string;
           email: string;
           token_hash: string;
+          verification_code_hash: string | null;
           invited_by: string;
           status: InvitationStatus;
           expires_at: string;
@@ -116,6 +168,7 @@ export interface Database {
           tenant_id: string;
           email: string;
           token_hash: string;
+          verification_code_hash?: string | null;
           invited_by: string;
           status?: InvitationStatus;
           expires_at: string;
@@ -127,6 +180,7 @@ export interface Database {
           tenant_id?: string;
           email?: string;
           token_hash?: string;
+          verification_code_hash?: string | null;
           invited_by?: string;
           status?: InvitationStatus;
           expires_at?: string;
@@ -233,15 +287,7 @@ export interface Database {
       };
     };
     Views: Record<string, never>;
-    Functions: {
-      register_public_subscriber: {
-        Args: {
-          p_tenant_slug: string;
-          p_plan_id: string;
-        };
-        Returns: string;
-      };
-    };
+    Functions: Record<string, never>;
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };

@@ -1,49 +1,37 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { getSuperAdminEmails } from "@/lib/env";
-import { updateSession } from "@/lib/supabase/middleware";
+import { SESSION_COOKIE } from "@/lib/auth/types";
 
-export async function middleware(request: NextRequest) {
-  const { supabaseResponse, user } = await updateSession(request);
+export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const hasSession = Boolean(request.cookies.get(SESSION_COOKIE)?.value);
 
   if (pathname.startsWith("/admin")) {
     if (pathname === "/admin/login") {
-      return supabaseResponse;
+      if (hasSession) {
+        return NextResponse.redirect(new URL("/admin", request.url));
+      }
+      return NextResponse.next();
     }
 
-    if (!user) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/admin/login";
-      return NextResponse.redirect(url);
-    }
-
-    const allowlist = getSuperAdminEmails();
-    const isAllowlisted =
-      user.email && allowlist.includes(user.email.toLowerCase());
-
-    if (!isAllowlisted) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/admin/login";
-      url.searchParams.set("error", "unauthorized");
-      return NextResponse.redirect(url);
+    if (!hasSession) {
+      return NextResponse.redirect(new URL("/admin/login", request.url));
     }
   }
 
   if (pathname.startsWith("/app")) {
-    if (!user) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/auth/login";
+    if (!hasSession) {
+      const url = new URL("/auth/login", request.url);
       url.searchParams.set("next", pathname);
       return NextResponse.redirect(url);
     }
   }
 
-  return supabaseResponse;
+  return NextResponse.next();
 }
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/health|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

@@ -1,23 +1,26 @@
 import { NextResponse } from "next/server";
 
-import { hasSupabaseConfig } from "@/lib/env";
-import { createClient } from "@/lib/supabase/server";
+import { ensureSuperAdminExists } from "@/lib/auth/bootstrap";
+import { hasDatabaseConfig } from "@/lib/env";
+import { createDbClient } from "@/lib/db/client";
 
 export async function GET() {
-  if (!hasSupabaseConfig()) {
+  if (!hasDatabaseConfig()) {
     return NextResponse.json(
       {
         status: "error",
         database: "not_configured",
-        message: "Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY",
+        auth: "custom",
+        message: "Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY",
       },
       { status: 503 },
     );
   }
 
   try {
-    const supabase = await createClient();
-    const { count, error } = await supabase
+    await ensureSuperAdminExists();
+    const db = createDbClient();
+    const { count, error } = await db
       .from("tenants")
       .select("*", { count: "exact", head: true });
 
@@ -26,6 +29,7 @@ export async function GET() {
         {
           status: "error",
           database: "connection_failed",
+          auth: "custom",
           message: error.message,
         },
         { status: 503 },
@@ -35,6 +39,7 @@ export async function GET() {
     return NextResponse.json({
       status: "ok",
       database: "connected",
+      auth: "custom",
       tenants: count ?? 0,
       timestamp: new Date().toISOString(),
     });
@@ -44,6 +49,7 @@ export async function GET() {
       {
         status: "error",
         database: "connection_failed",
+        auth: "custom",
         message,
       },
       { status: 503 },

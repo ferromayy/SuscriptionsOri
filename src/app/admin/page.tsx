@@ -1,47 +1,50 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 
-import { isPlatformAdmin } from "@/lib/auth/roles";
-import { createClient } from "@/lib/supabase/server";
+import { AdminPageWrapper } from "@/components/admin/admin-shell";
+import { createDbClient } from "@/lib/db/client";
 
 export default async function AdminDashboardPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const db = createDbClient();
 
-  if (!user) {
-    redirect("/admin/login");
-  }
-
-  const allowed = await isPlatformAdmin(user.id, user.email);
-  if (!allowed) {
-    redirect("/admin/login?error=unauthorized");
-  }
-
-  const { count: tenantCount } = await supabase
+  const { count: tenantCount } = await db
     .from("tenants")
     .select("*", { count: "exact", head: true });
 
-  return (
-    <div className="mx-auto max-w-4xl px-6 py-16">
-      <p className="text-sm font-medium uppercase tracking-widest text-slate-400">
-        Super Admin
-      </p>
-      <h1 className="mt-2 text-3xl font-semibold">Panel de plataforma</h1>
-      <p className="mt-2 text-slate-400">Sesión: {user.email}</p>
+  const { count: pendingCount } = await db
+    .from("tenants")
+    .select("*", { count: "exact", head: true })
+    .eq("status", "pending_owner");
 
-      <div className="mt-8 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
-        <p className="text-sm text-slate-400">Tenants en la base</p>
-        <p className="mt-2 text-3xl font-semibold">{tenantCount ?? 0}</p>
+  return (
+    <AdminPageWrapper
+      title="Panel de plataforma"
+      description="Gestioná clientes (tenants) e invitaciones."
+    >
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+          <p className="text-sm text-slate-400">Total tenants</p>
+          <p className="mt-2 text-3xl font-semibold">{tenantCount ?? 0}</p>
+        </div>
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+          <p className="text-sm text-slate-400">Invitaciones pendientes</p>
+          <p className="mt-2 text-3xl font-semibold">{pendingCount ?? 0}</p>
+        </div>
       </div>
 
-      <Link
-        href="/"
-        className="mt-8 inline-block text-sm text-slate-400 hover:text-slate-200"
-      >
-        ← Volver al inicio
-      </Link>
-    </div>
+      <div className="mt-8 flex flex-wrap gap-3">
+        <Link
+          href="/admin/tenants/new"
+          className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-slate-950"
+        >
+          + Invitar nuevo cliente
+        </Link>
+        <Link
+          href="/admin/tenants"
+          className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:border-slate-500"
+        >
+          Ver tenants
+        </Link>
+      </div>
+    </AdminPageWrapper>
   );
 }

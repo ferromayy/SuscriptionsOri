@@ -1,94 +1,77 @@
 # Subscriptions Ori
 
-Plataforma de suscripciones multi-tenant con Next.js, Supabase y PostgreSQL.
+Plataforma de suscripciones multi-tenant.
 
 ## Stack
 
-- **Frontend / Backend:** Next.js 16 (App Router), React, TypeScript, Tailwind CSS
-- **Base de datos:** Supabase (PostgreSQL + Auth + RLS)
+- **App:** Next.js 16, TypeScript, Tailwind CSS
+- **DB:** Supabase PostgreSQL (solo base de datos — **sin Supabase Auth**)
+- **Auth:** Propio (users + sessions + bcrypt) — **$0 en MAU**
+- **Roles:** Tablas `platform_admins` y `tenant_members` — validados en Next.js
 - **Deploy:** Vercel
-- **Repo:** GitHub
 
-## Requisitos
-
-- Node.js 20+
-- Cuenta en [Supabase](https://supabase.com)
-- Cuenta en [Vercel](https://vercel.com)
-
-## 1. Variables de entorno
-
-Copia el ejemplo y completa con tus credenciales de Supabase:
+## Variables de entorno
 
 ```bash
 cp .env.example .env.local
 ```
 
-| Variable | Dónde obtenerla |
-|----------|-----------------|
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase → Project Settings → API |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase → Project Settings → API |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Project Settings → API (solo server) |
-| `SUPER_ADMIN_EMAILS` | Email del Super Admin hardcodeado |
-| `NEXT_PUBLIC_APP_URL` | `http://localhost:3000` en local |
+| Variable | Descripción |
+|----------|-------------|
+| `NEXT_PUBLIC_SUPABASE_URL` | URL del proyecto Supabase |
+| `SUPABASE_SECRET_KEY` | Secret key (solo server, acceso a Postgres) |
+| `SUPER_ADMIN_EMAIL` | Email del super admin (se crea solo) |
+| `SUPER_ADMIN_PASSWORD` | Contraseña del super admin |
+| `NEXT_PUBLIC_APP_URL` | URL de la app |
 
-## 2. Base de datos
+> Ya **no** necesitás `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` — no usamos Supabase Auth.
 
-En el [SQL Editor](https://supabase.com/dashboard) de tu proyecto, ejecuta el contenido de:
+## Base de datos
+
+### Si es instalación nueva
+
+Ejecutá en el SQL Editor de Supabase:
 
 ```
 supabase/migrations/20250705180000_initial_schema.sql
 ```
 
-Luego crea el Super Admin:
+### Si ya corriste la migración vieja (con auth.users)
 
-1. Supabase → **Authentication → Users → Add user** (email + password).
-2. Copia el `user_id` (UUID).
-3. Ejecuta en SQL Editor:
+1. `supabase/migrations/20250705200000_reset_old_auth_schema.sql`
+2. `supabase/migrations/20250705180000_initial_schema.sql`
 
-```sql
-insert into public.platform_admins (user_id)
-values ('TU-USER-UUID-AQUI')
-on conflict (user_id) do nothing;
-```
-
-4. Asegúrate de que ese email esté en `SUPER_ADMIN_EMAILS`.
-
-## 3. Desarrollo local
+## Desarrollo
 
 ```bash
 npm install
 npm run dev
 ```
 
-- App: [http://localhost:3000](http://localhost:3000)
-- Health API: [http://localhost:3000/api/health](http://localhost:3000/api/health)
-- Super Admin: [http://localhost:3000/admin/login](http://localhost:3000/admin/login)
+El super admin se crea automáticamente al primer request si configuraste `SUPER_ADMIN_EMAIL` y `SUPER_ADMIN_PASSWORD`.
 
-## 4. Deploy en Vercel
+- Home: http://localhost:3000
+- Admin: http://localhost:3000/admin/login
+- Health: http://localhost:3000/api/health
 
-1. Importa el repo `ferromayy/SuscriptionsOri` en Vercel.
-2. Agrega las mismas variables de entorno que en `.env.local`.
-3. En Supabase → Authentication → URL Configuration, agrega:
-   - Site URL: `https://tu-dominio.vercel.app`
-   - Redirect URLs: `https://tu-dominio.vercel.app/**`
+## Arquitectura de auth (Opción C)
+
+```
+Usuario → login (Server Action)
+       → verifica password (bcrypt)
+       → crea session en tabla sessions
+       → cookie httpOnly session_token
+       → middleware valida sesión
+       → permisos en lib/auth/permissions.ts
+       → DB vía SUPABASE_SECRET_KEY (service role)
+```
+
+Supabase cobra solo por el plan de **base de datos**, no por autenticación de usuarios.
 
 ## Estructura
 
 ```
-src/
-  app/              # Rutas App Router
-  components/       # UI
-  lib/supabase/     # Clientes browser, server y admin
-  lib/auth/         # Roles y permisos
-  types/            # Tipos de la base de datos
-supabase/
-  migrations/       # Esquema SQL + RLS
+src/lib/auth/     → session, password, permissions, bootstrap
+src/lib/db/       → cliente PostgreSQL (service role)
+supabase/migrations/
 ```
-
-## Roles
-
-| Rol | Registro | Acceso |
-|-----|----------|--------|
-| Super Admin | Hardcodeado (seed) | `/admin` |
-| Cliente | Propio + invitación (próximo paso) | `/app/[tenant]` |
-| Suscripto | Propio en portal del cliente | `/[slug]/join` |

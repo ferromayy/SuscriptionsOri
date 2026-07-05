@@ -15,9 +15,10 @@ export default function AdminLoginPage({
         </p>
         <h1 className="mt-2 text-2xl font-semibold">Super Admin</h1>
         <p className="mt-2 text-sm text-slate-400">
-          Acceso restringido. El usuario debe estar en{" "}
-          <code className="text-slate-300">SUPER_ADMIN_EMAILS</code> o en{" "}
-          <code className="text-slate-300">platform_admins</code>.
+          Auth propio. El usuario se crea desde{" "}
+          <code className="text-slate-300">SUPER_ADMIN_EMAIL</code> y{" "}
+          <code className="text-slate-300">SUPER_ADMIN_PASSWORD</code> en{" "}
+          <code className="text-slate-300">.env.local</code>.
         </p>
         <AdminLoginForm searchParams={searchParams} />
         <Link

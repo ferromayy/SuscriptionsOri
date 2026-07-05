@@ -1,21 +1,24 @@
 import Link from "next/link";
 
-import { hasSupabaseConfig } from "@/lib/env";
-import { createClient } from "@/lib/supabase/server";
+import { hasDatabaseConfig } from "@/lib/env";
+import { createDbClient } from "@/lib/db/client";
+import { ensureSuperAdminExists } from "@/lib/auth/bootstrap";
 
 async function getSystemStatus() {
-  if (!hasSupabaseConfig()) {
+  if (!hasDatabaseConfig()) {
     return {
       configured: false,
       connected: false,
       tenants: 0,
-      message: "Configura las variables de entorno de Supabase",
+      auth: "custom",
+      message: "Configura NEXT_PUBLIC_SUPABASE_URL y SUPABASE_SECRET_KEY",
     } as const;
   }
 
   try {
-    const supabase = await createClient();
-    const { count, error } = await supabase
+    await ensureSuperAdminExists();
+    const db = createDbClient();
+    const { count, error } = await db
       .from("tenants")
       .select("*", { count: "exact", head: true });
 
@@ -24,6 +27,7 @@ async function getSystemStatus() {
         configured: true,
         connected: false,
         tenants: 0,
+        auth: "custom",
         message: error.message,
       } as const;
     }
@@ -32,7 +36,8 @@ async function getSystemStatus() {
       configured: true,
       connected: true,
       tenants: count ?? 0,
-      message: "Conexión exitosa con PostgreSQL vía Supabase",
+      auth: "custom",
+      message: "PostgreSQL conectado · Auth propio (gratis)",
     } as const;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Error desconocido";
@@ -40,18 +45,13 @@ async function getSystemStatus() {
       configured: true,
       connected: false,
       tenants: 0,
+      auth: "custom",
       message,
     } as const;
   }
 }
 
-function StatusBadge({
-  ok,
-  label,
-}: {
-  ok: boolean;
-  label: string;
-}) {
+function StatusBadge({ ok, label }: { ok: boolean; label: string }) {
   return (
     <span
       className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${
@@ -79,7 +79,7 @@ export default async function Home() {
             Plataforma de suscripciones
           </h1>
           <p className="mt-4 max-w-2xl text-lg text-slate-400">
-            Base conectada: Next.js, Supabase, PostgreSQL y despliegue en Vercel.
+            Supabase solo como PostgreSQL. Auth y roles 100% en la app.
           </p>
         </header>
 
@@ -94,6 +94,7 @@ export default async function Home() {
               ok={status.connected}
               label={status.connected ? "DB conectada" : "DB sin conexión"}
             />
+            <StatusBadge ok label={`Auth: ${status.auth}`} />
           </div>
           <p className="mt-6 text-slate-300">{status.message}</p>
           {status.connected && (
