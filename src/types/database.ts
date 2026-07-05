@@ -1,0 +1,248 @@
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[];
+
+export type TenantStatus =
+  | "pending_owner"
+  | "active"
+  | "suspended"
+  | "cancelled";
+
+export type TenantMemberRole = "owner" | "admin" | "subscriber";
+
+export type JoinedVia = "client_invite" | "public_signup";
+
+export type InvitationStatus = "pending" | "accepted" | "expired" | "revoked";
+
+export type SubscriptionStatus =
+  | "trialing"
+  | "active"
+  | "past_due"
+  | "cancelled";
+
+export interface Database {
+  public: {
+    Tables: {
+      profiles: {
+        Row: {
+          id: string;
+          email: string;
+          full_name: string | null;
+          avatar_url: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          email: string;
+          full_name?: string | null;
+          avatar_url?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          email?: string;
+          full_name?: string | null;
+          avatar_url?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      platform_admins: {
+        Row: {
+          user_id: string;
+          created_at: string;
+        };
+        Insert: {
+          user_id: string;
+          created_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      tenants: {
+        Row: {
+          id: string;
+          name: string;
+          slug: string;
+          status: TenantStatus;
+          settings: Json;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          slug: string;
+          status?: TenantStatus;
+          settings?: Json;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          slug?: string;
+          status?: TenantStatus;
+          settings?: Json;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      platform_invitations: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          email: string;
+          token_hash: string;
+          invited_by: string;
+          status: InvitationStatus;
+          expires_at: string;
+          accepted_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id: string;
+          email: string;
+          token_hash: string;
+          invited_by: string;
+          status?: InvitationStatus;
+          expires_at: string;
+          accepted_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          tenant_id?: string;
+          email?: string;
+          token_hash?: string;
+          invited_by?: string;
+          status?: InvitationStatus;
+          expires_at?: string;
+          accepted_at?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      tenant_members: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          user_id: string;
+          role: TenantMemberRole;
+          joined_via: JoinedVia;
+          status: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id: string;
+          user_id: string;
+          role: TenantMemberRole;
+          joined_via: JoinedVia;
+          status?: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          tenant_id?: string;
+          user_id?: string;
+          role?: TenantMemberRole;
+          joined_via?: JoinedVia;
+          status?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      plans: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          name: string;
+          description: string | null;
+          price_cents: number;
+          currency: string;
+          interval: string;
+          is_active: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id: string;
+          name: string;
+          description?: string | null;
+          price_cents?: number;
+          currency?: string;
+          interval?: string;
+          is_active?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          tenant_id?: string;
+          name?: string;
+          description?: string | null;
+          price_cents?: number;
+          currency?: string;
+          interval?: string;
+          is_active?: boolean;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      subscriptions: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          user_id: string;
+          plan_id: string;
+          status: SubscriptionStatus;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id: string;
+          user_id: string;
+          plan_id: string;
+          status?: SubscriptionStatus;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          tenant_id?: string;
+          user_id?: string;
+          plan_id?: string;
+          status?: SubscriptionStatus;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+    };
+    Views: Record<string, never>;
+    Functions: {
+      register_public_subscriber: {
+        Args: {
+          p_tenant_slug: string;
+          p_plan_id: string;
+        };
+        Returns: string;
+      };
+    };
+    Enums: Record<string, never>;
+    CompositeTypes: Record<string, never>;
+  };
+}
