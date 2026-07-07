@@ -2,24 +2,26 @@
 
 import { redirect } from "next/navigation";
 
+import { revalidateAdmin } from "@/lib/admin/revalidate";
 import { ensureSuperAdminExists } from "@/lib/auth/bootstrap";
 import { resendVerificationForEmail } from "@/lib/auth/email-verification";
-import { clearSessionCookie, setSessionCookie } from "@/lib/auth/cookies";
+import {
+  clearCurrentSession,
+  establishSession,
+} from "@/lib/auth/cookies";
+import { resolvePostLoginRedirect } from "@/lib/auth/post-login-redirect";
 import { isPlatformAdmin } from "@/lib/auth/permissions";
 import { verifyPassword } from "@/lib/auth/password";
-import {
-  createSession,
-  deleteSession,
-  findUserByEmail,
-} from "@/lib/auth/session";
-import { getSessionTokenFromCookies } from "@/lib/auth/current-user";
+import { findUserByEmail } from "@/lib/auth/session";
 
 export type AuthActionState = {
   error: string | null;
   success?: string | null;
 };
 
-async function signIn(email: string, password: string): Promise<AuthActionState> {
+type SignInResult = AuthActionState & { userId?: string };
+
+async function signIn(email: string, password: string): Promise<SignInResult> {
   await ensureSuperAdminExists();
 
   const user = await findUserByEmail(email);
@@ -39,9 +41,8 @@ async function signIn(email: string, password: string): Promise<AuthActionState>
     };
   }
 
-  const token = await createSession(user.id);
-  await setSessionCookie(token);
-  return { error: null };
+  await establishSession(user.id);
+  return { error: null, userId: user.id };
 }
 
 export async function loginAction(
@@ -57,11 +58,12 @@ export async function loginAction(
   }
 
   const result = await signIn(email, password);
-  if (result.error) {
-    return result;
+  if (result.error || !result.userId) {
+    return { error: result.error ?? "Credenciales inválidas" };
   }
 
-  redirect(next.startsWith("/") ? next : "/");
+  const destination = await resolvePostLoginRedirect(result.userId, next);
+  redirect(destination);
 }
 
 export async function adminLoginAction(
@@ -76,17 +78,12 @@ export async function adminLoginAction(
   }
 
   const result = await signIn(email, password);
-  if (result.error) {
-    return result;
+  if (result.error || !result.userId) {
+    return { error: result.error ?? "Credenciales inválidas" };
   }
 
-  const user = await findUserByEmail(email);
-  if (!user || !(await isPlatformAdmin(user.id))) {
-    const token = await getSessionTokenFromCookies();
-    if (token) {
-      await deleteSession(token);
-    }
-    await clearSessionCookie();
+  if (!(await isPlatformAdmin(result.userId))) {
+    await clearCurrentSession();
     return { error: "No tienes permisos de Super Admin" };
   }
 
@@ -114,10 +111,6 @@ export async function resendVerificationAction(
 }
 
 export async function logoutAction(): Promise<void> {
-  const token = await getSessionTokenFromCookies();
-  if (token) {
-    await deleteSession(token);
-  }
-  await clearSessionCookie();
+  await clearCurrentSession();
   redirect("/");
 }

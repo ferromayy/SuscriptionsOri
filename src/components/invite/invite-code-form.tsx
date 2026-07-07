@@ -1,7 +1,6 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useActionState } from "react";
 
 import {
   verifyInviteCodeAction,
@@ -17,27 +16,20 @@ export function InviteCodeForm({
   token: string;
   email: string;
 }) {
-  const router = useRouter();
   const [state, formAction, pending] = useActionState(
     verifyInviteCodeAction,
     initialState,
   );
 
-  useEffect(() => {
-    if (state.verified) {
-      router.refresh();
-    }
-  }, [state.verified, router]);
-
   return (
     <form action={formAction} className="mt-8 space-y-4">
       <input type="hidden" name="token" value={token} />
-      <p className="text-sm text-slate-400">
-        Cuenta para <strong className="text-slate-200">{email}</strong>. Ingresá
+      <p className="text-sm text-gray-600">
+        Cuenta para <strong className="text-gray-800">{email}</strong>. Ingresá
         el código que te dio el administrador.
       </p>
       <div>
-        <label htmlFor="inviteCode" className="block text-sm text-slate-300">
+        <label htmlFor="inviteCode" className="block text-sm text-gray-700">
           Código de 6 dígitos
         </label>
         <input
@@ -49,20 +41,20 @@ export function InviteCodeForm({
           required
           autoComplete="one-time-code"
           placeholder="000000"
-          className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-3 text-center text-2xl tracking-[0.4em] outline-none focus:border-slate-500"
+          className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-3 text-center text-2xl tracking-[0.4em] outline-none focus:border-gray-400"
         />
       </div>
       {state.error && (
-        <p className="text-sm text-red-400" role="alert">
+        <p className="text-sm text-red-600" role="alert">
           {state.error}
         </p>
       )}
       <button
         type="submit"
         disabled={pending}
-        className="w-full rounded-lg bg-white px-4 py-2 font-medium text-slate-950 disabled:opacity-60"
+        className="w-full rounded-lg bg-gray-900 px-4 py-2 font-medium text-white disabled:opacity-60"
       >
-        {pending ? "Verificando..." : "Verificar código"}
+        {pending ? "Verificando..." : "Continuar"}
       </button>
     </form>
   );

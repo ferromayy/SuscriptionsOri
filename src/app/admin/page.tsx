@@ -21,12 +21,12 @@ export default async function AdminDashboardPage() {
       description="Gestioná clientes (tenants) e invitaciones."
     >
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
-          <p className="text-sm text-slate-400">Total tenants</p>
+        <div className="rounded-2xl border border-gray-200 bg-gray-50 p-6">
+          <p className="text-sm text-gray-600">Total tenants</p>
           <p className="mt-2 text-3xl font-semibold">{tenantCount ?? 0}</p>
         </div>
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
-          <p className="text-sm text-slate-400">Invitaciones pendientes</p>
+        <div className="rounded-2xl border border-gray-200 bg-gray-50 p-6">
+          <p className="text-sm text-gray-600">Invitaciones pendientes</p>
           <p className="mt-2 text-3xl font-semibold">{pendingCount ?? 0}</p>
         </div>
       </div>
@@ -34,13 +34,13 @@ export default async function AdminDashboardPage() {
       <div className="mt-8 flex flex-wrap gap-3">
         <Link
           href="/admin/tenants/new"
-          className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-slate-950"
+          className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white"
         >
           + Invitar nuevo cliente
         </Link>
         <Link
           href="/admin/tenants"
-          className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:border-slate-500"
+          className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-700 hover:border-gray-400"
         >
           Ver tenants
         </Link>

@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidateAdmin } from "@/lib/admin/revalidate";
 
 import {
   buildClientInviteUrl,
@@ -12,6 +12,7 @@ import {
 } from "@/lib/invitations/invite-code";
 import { requirePlatformAdmin } from "@/lib/auth/require-admin";
 import { createDbClient } from "@/lib/db/client";
+import { deleteTenantWithCleanup } from "@/lib/tenants/delete-tenant";
 import { createTenantSchema } from "@/lib/validations/tenant";
 
 const INVITATION_DAYS = 7;
@@ -102,8 +103,7 @@ export async function createTenantWithInvitation(
     return { error: invitationError.message };
   }
 
-  revalidatePath("/admin/tenants");
-  revalidatePath("/admin");
+  revalidateAdmin();
 
   return {
     error: null,
@@ -121,16 +121,14 @@ export async function createTenantWithInvitation(
 
 export async function deleteTenant(tenantId: string): Promise<{ error: string | null }> {
   await requirePlatformAdmin();
-  const db = createDbClient();
 
-  const { error } = await db.from("tenants").delete().eq("id", tenantId);
+  const result = await deleteTenantWithCleanup(tenantId);
 
-  if (error) {
-    return { error: error.message };
+  if (result.error) {
+    return result;
   }
 
-  revalidatePath("/admin/tenants");
-  revalidatePath("/admin");
+  revalidateAdmin();
   return { error: null };
 }
 
@@ -197,7 +195,7 @@ export async function regenerateInvitation(
     return { error: error.message };
   }
 
-  revalidatePath("/admin/tenants");
+  revalidateAdmin();
 
   return {
     error: null,

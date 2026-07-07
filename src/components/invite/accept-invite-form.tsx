@@ -34,14 +34,14 @@ export function AcceptInviteForm({
 
   return (
     <div className="mt-8">
-      <div className="flex rounded-lg border border-slate-700 p-1">
+      <div className="flex rounded-lg border border-gray-200 p-1">
         <button
           type="button"
           onClick={() => setMode("signup")}
           className={`flex-1 rounded-md px-3 py-2 text-sm ${
             mode === "signup"
-              ? "bg-white text-slate-950"
-              : "text-slate-400 hover:text-slate-200"
+              ? "bg-gray-900 text-white"
+              : "text-gray-600 hover:text-gray-800"
           }`}
         >
           Crear cuenta
@@ -51,8 +51,8 @@ export function AcceptInviteForm({
           onClick={() => setMode("login")}
           className={`flex-1 rounded-md px-3 py-2 text-sm ${
             mode === "login"
-              ? "bg-white text-slate-950"
-              : "text-slate-400 hover:text-slate-200"
+              ? "bg-gray-900 text-white"
+              : "text-gray-600 hover:text-gray-800"
           }`}
         >
           Ya tengo cuenta
@@ -63,26 +63,26 @@ export function AcceptInviteForm({
         <form action={signUpAction} className="mt-6 space-y-4">
           <input type="hidden" name="token" value={token} />
           <div>
-            <label className="block text-sm text-slate-300">Email</label>
+            <label className="block text-sm text-gray-700">Email</label>
             <input
               readOnly
               value={email}
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-400"
+              className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-600"
             />
           </div>
           <div>
-            <label htmlFor="fullName" className="block text-sm text-slate-300">
+            <label htmlFor="fullName" className="block text-sm text-gray-700">
               Tu nombre
             </label>
             <input
               id="fullName"
               name="fullName"
               required
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 outline-none focus:border-slate-500"
+              className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 outline-none focus:border-gray-400"
             />
           </div>
           <div>
-            <label htmlFor="password" className="block text-sm text-slate-300">
+            <label htmlFor="password" className="block text-sm text-gray-700">
               Contraseña
             </label>
             <input
@@ -92,7 +92,7 @@ export function AcceptInviteForm({
               required
               minLength={8}
               autoComplete="new-password"
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 outline-none focus:border-slate-500"
+              className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 outline-none focus:border-gray-400"
             />
           </div>
           <SubmitButton pending={pending} label="Crear cuenta y aceptar" />
@@ -101,15 +101,15 @@ export function AcceptInviteForm({
         <form action={signInAction} className="mt-6 space-y-4">
           <input type="hidden" name="token" value={token} />
           <div>
-            <label className="block text-sm text-slate-300">Email</label>
+            <label className="block text-sm text-gray-700">Email</label>
             <input
               readOnly
               value={email}
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-400"
+              className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-600"
             />
           </div>
           <div>
-            <label htmlFor="loginPassword" className="block text-sm text-slate-300">
+            <label htmlFor="loginPassword" className="block text-sm text-gray-700">
               Contraseña
             </label>
             <input
@@ -118,7 +118,7 @@ export function AcceptInviteForm({
               type="password"
               required
               autoComplete="current-password"
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 outline-none focus:border-slate-500"
+              className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 outline-none focus:border-gray-400"
             />
           </div>
           <SubmitButton pending={pending} label="Iniciar sesión y aceptar" />
@@ -126,7 +126,7 @@ export function AcceptInviteForm({
       )}
 
       {error && (
-        <p className="mt-4 text-sm text-red-400" role="alert">
+        <p className="mt-4 text-sm text-red-600" role="alert">
           {error}
         </p>
       )}
@@ -145,7 +145,7 @@ function SubmitButton({
     <button
       type="submit"
       disabled={pending}
-      className="w-full rounded-lg bg-white px-4 py-2 font-medium text-slate-950 disabled:opacity-60"
+      className="w-full rounded-lg bg-gray-900 px-4 py-2 font-medium text-white disabled:opacity-60"
     >
       {pending ? "Procesando..." : label}
     </button>

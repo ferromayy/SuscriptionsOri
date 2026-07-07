@@ -56,8 +56,8 @@ function StatusBadge({ ok, label }: { ok: boolean; label: string }) {
     <span
       className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${
         ok
-          ? "bg-emerald-100 text-emerald-800"
-          : "bg-amber-100 text-amber-800"
+          ? "bg-gray-100 text-gray-900"
+          : "bg-gray-100 text-gray-600"
       }`}
     >
       {label}
@@ -69,21 +69,19 @@ export default async function Home() {
   const status = await getSystemStatus();
 
   return (
-    <div className="min-h-full bg-slate-950 text-slate-50">
+    <div className="min-h-full bg-white text-gray-900">
       <div className="mx-auto flex min-h-full max-w-4xl flex-col px-6 py-16">
         <header className="mb-12">
-          <p className="text-sm font-medium uppercase tracking-widest text-slate-400">
-            Subscriptions Ori
-          </p>
-          <h1 className="mt-2 text-4xl font-semibold tracking-tight">
+          <p className="ori-eyebrow">Subscriptions Ori</p>
+          <h1 className="ori-title mt-2 text-4xl">
             Plataforma de suscripciones
           </h1>
-          <p className="mt-4 max-w-2xl text-lg text-slate-400">
+          <p className="ori-subtitle mt-4 max-w-2xl text-lg">
             Supabase solo como PostgreSQL. Auth y roles 100% en la app.
           </p>
         </header>
 
-        <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-8">
+        <section className="rounded-2xl border border-gray-200 bg-gray-50 p-8">
           <h2 className="text-xl font-semibold">Estado del sistema</h2>
           <div className="mt-6 flex flex-wrap gap-3">
             <StatusBadge
@@ -96,9 +94,9 @@ export default async function Home() {
             />
             <StatusBadge ok label={`Auth: ${status.auth}`} />
           </div>
-          <p className="mt-6 text-slate-300">{status.message}</p>
+          <p className="mt-6 text-gray-700">{status.message}</p>
           {status.connected && (
-            <p className="mt-2 text-sm text-slate-500">
+            <p className="mt-2 text-sm text-gray-500">
               Tenants registrados: {status.tenants}
             </p>
           )}
@@ -107,25 +105,25 @@ export default async function Home() {
         <section className="mt-8 grid gap-4 sm:grid-cols-3">
           <Link
             href="/admin/login"
-            className="rounded-xl border border-slate-800 bg-slate-900/40 p-6 transition hover:border-slate-600"
+            className="rounded-xl border border-gray-200 bg-gray-50 p-6 transition hover:border-gray-300"
           >
             <h3 className="font-medium">Super Admin</h3>
-            <p className="mt-2 text-sm text-slate-400">Acceso de plataforma</p>
+            <p className="mt-2 text-sm text-gray-600">Acceso de plataforma</p>
           </Link>
           <Link
             href="/auth/login"
-            className="rounded-xl border border-slate-800 bg-slate-900/40 p-6 transition hover:border-slate-600"
+            className="rounded-xl border border-gray-200 bg-gray-50 p-6 transition hover:border-gray-300"
           >
             <h3 className="font-medium">Iniciar sesión</h3>
-            <p className="mt-2 text-sm text-slate-400">Clientes y suscriptos</p>
+            <p className="mt-2 text-sm text-gray-600">Ya tengo cuenta</p>
           </Link>
-          <a
-            href="/api/health"
-            className="rounded-xl border border-slate-800 bg-slate-900/40 p-6 transition hover:border-slate-600"
+          <Link
+            href="/join"
+            className="rounded-xl border border-gray-200 bg-gray-50 p-6 transition hover:border-gray-300"
           >
-            <h3 className="font-medium">Health API</h3>
-            <p className="mt-2 text-sm text-slate-400">JSON de conexión</p>
-          </a>
+            <h3 className="font-medium">Registrarme</h3>
+            <p className="mt-2 text-sm text-gray-600">Soy suscriptor nuevo</p>
+          </Link>
         </section>
       </div>
     </div>

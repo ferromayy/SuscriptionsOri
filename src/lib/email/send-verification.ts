@@ -1,5 +1,11 @@
 import { Resend } from "resend";
 
+import {
+  handleResendError,
+  isResendConfigured,
+  logDevEmailFallback,
+} from "@/lib/email/delivery";
+
 type SendVerificationInput = {
   to: string;
   code: string;
@@ -10,16 +16,18 @@ type SendVerificationInput = {
 export async function sendVerificationEmail(
   input: SendVerificationInput,
 ): Promise<void> {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.EMAIL_FROM;
+  const devFallback = {
+    label: "CÓDIGO DE VERIFICACIÓN",
+    to: input.to,
+    lines: [
+      `Código: ${input.code}`,
+      `Pegalo en: ${input.verifyUrl}`,
+    ],
+  };
 
-  if (!apiKey || !from) {
+  if (!isResendConfigured()) {
     if (process.env.NODE_ENV === "development") {
-      console.log("\n--- CÓDIGO DE VERIFICACIÓN (dev) ---");
-      console.log(`Para: ${input.to}`);
-      console.log(`Código: ${input.code}`);
-      console.log(`Pegalo en: ${input.verifyUrl}`);
-      console.log("------------------------------------\n");
+      logDevEmailFallback(devFallback);
       return;
     }
     throw new Error(
@@ -27,17 +35,17 @@ export async function sendVerificationEmail(
     );
   }
 
-  const resend = new Resend(apiKey);
+  const resend = new Resend(process.env.RESEND_API_KEY);
   const greeting = input.name ? `Hola ${input.name}` : "Hola";
 
   const { error } = await resend.emails.send({
-    from,
+    from: process.env.EMAIL_FROM!,
     to: input.to,
     subject: `Tu código: ${input.code} — Subscriptions Ori`,
     html: `
       <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
         <h2>${greeting}</h2>
-        <p>Ingresá este código para verificar tu email y activar tu organización:</p>
+        <p>Ingresá este código para verificar tu email:</p>
         <p style="font-size: 32px; font-weight: bold; letter-spacing: 8px;
                   text-align: center; margin: 32px 0; color: #0f172a;">
           ${input.code}
@@ -57,6 +65,6 @@ export async function sendVerificationEmail(
   });
 
   if (error) {
-    throw new Error(error.message);
+    await handleResendError(error, devFallback);
   }
 }

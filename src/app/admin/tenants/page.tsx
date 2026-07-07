@@ -30,25 +30,25 @@ export default async function TenantsListPage() {
       <div className="mb-6">
         <Link
           href="/admin/tenants/new"
-          className="inline-flex rounded-lg bg-white px-4 py-2 text-sm font-medium text-slate-950"
+          className="inline-flex rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white"
         >
           + Nuevo cliente
         </Link>
       </div>
 
       {(!tenants || tenants.length === 0) && (
-        <div className="rounded-2xl border border-dashed border-slate-700 p-10 text-center text-slate-400">
+        <div className="rounded-2xl border border-dashed border-gray-200 p-10 text-center text-gray-600">
           No hay tenants todavía.{" "}
-          <Link href="/admin/tenants/new" className="text-slate-200 underline">
+          <Link href="/admin/tenants/new" className="text-gray-800 underline">
             Creá el primero
           </Link>
         </div>
       )}
 
       {tenants && tenants.length > 0 && (
-        <div className="overflow-hidden rounded-2xl border border-slate-800">
+        <div className="overflow-hidden rounded-2xl border border-gray-200">
           <table className="w-full text-left text-sm">
-            <thead className="border-b border-slate-800 bg-slate-900/60 text-slate-400">
+            <thead className="border-b border-gray-200 bg-gray-50 text-gray-600">
               <tr>
                 <th className="px-4 py-3 font-medium">Organización</th>
                 <th className="px-4 py-3 font-medium">Slug</th>
@@ -63,18 +63,18 @@ export default async function TenantsListPage() {
                 return (
                   <tr
                     key={tenant.id}
-                    className="border-b border-slate-800/80 last:border-0"
+                    className="border-b border-gray-200/80 last:border-0"
                   >
                     <td className="px-4 py-3 font-medium">{tenant.name}</td>
-                    <td className="px-4 py-3 text-slate-400">{tenant.slug}</td>
+                    <td className="px-4 py-3 text-gray-600">{tenant.slug}</td>
                     <td className="px-4 py-3">
                       <TenantStatusBadge status={tenant.status} />
                     </td>
-                    <td className="px-4 py-3 text-slate-400">
+                    <td className="px-4 py-3 text-gray-600">
                       {invite ? (
                         <span>
                           {invite.email}
-                          <span className="block text-xs text-slate-500">
+                          <span className="block text-xs text-gray-500">
                             expira{" "}
                             {new Date(invite.expires_at).toLocaleDateString(
                               "es-AR",
@@ -82,7 +82,7 @@ export default async function TenantsListPage() {
                           </span>
                         </span>
                       ) : (
-                        <span className="text-slate-600">—</span>
+                        <span className="text-gray-600">—</span>
                       )}
                     </td>
                     <td className="px-4 py-3">

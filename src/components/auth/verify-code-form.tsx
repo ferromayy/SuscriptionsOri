@@ -19,7 +19,7 @@ export function VerifyCodeForm({ email }: { email: string }) {
     <form action={formAction} className="mt-8 space-y-4">
       <input type="hidden" name="email" value={email} />
       <div>
-        <label htmlFor="code" className="block text-sm text-slate-300">
+        <label htmlFor="code" className="block text-sm text-gray-700">
           Código de 6 dígitos
         </label>
         <input
@@ -31,20 +31,20 @@ export function VerifyCodeForm({ email }: { email: string }) {
           required
           autoComplete="one-time-code"
           placeholder="000000"
-          className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-3 text-center text-2xl tracking-[0.4em] outline-none focus:border-slate-500"
+          className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-3 text-center text-2xl tracking-[0.4em] outline-none focus:border-gray-400"
         />
       </div>
       {state.error && (
-        <p className="text-sm text-red-400" role="alert">
+        <p className="text-sm text-red-600" role="alert">
           {state.error}
         </p>
       )}
       <button
         type="submit"
         disabled={pending}
-        className="w-full rounded-lg bg-white px-4 py-2 font-medium text-slate-950 disabled:opacity-60"
+        className="w-full rounded-lg bg-gray-900 px-4 py-2 font-medium text-white disabled:opacity-60"
       >
-        {pending ? "Verificando..." : "Verificar y activar"}
+        {pending ? "Verificando..." : "Verificar"}
       </button>
     </form>
   );

@@ -1,18 +1,19 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
+import { revalidateAdmin } from "@/lib/admin/revalidate";
 import { markEmailVerified } from "@/lib/auth/email-verification";
-import { setSessionCookie } from "@/lib/auth/cookies";
+import { establishSession } from "@/lib/auth/cookies";
+import { passwordSchema } from "@/lib/auth/schemas";
 import { verifyPassword } from "@/lib/auth/password";
 import {
-  createSession,
   createUser,
   findUserByEmail,
+  updateUserCredentials,
 } from "@/lib/auth/session";
-import { getCurrentUser } from "@/lib/auth/current-user";
+import { isOrphanAppUser } from "@/lib/auth/user-cleanup";
 import { acceptClientInvitation } from "@/lib/invitations/accept-invitation";
 import { getValidClientInvitation } from "@/lib/invitations/get-invitation";
 import {
@@ -29,10 +30,6 @@ export type InviteCodeState = {
   error: string | null;
   verified?: boolean;
 };
-
-const passwordSchema = z
-  .string()
-  .min(8, "La contraseña debe tener al menos 8 caracteres");
 
 const signUpSchema = z.object({
   token: z.string().min(1),
@@ -70,8 +67,7 @@ async function acceptInvitationForUser(
     invitation.tenantId,
   );
 
-  revalidatePath("/admin/tenants");
-  revalidatePath("/admin");
+  revalidateAdmin();
 
   return invitation.tenant.slug;
 }
@@ -99,7 +95,7 @@ export async function verifyInviteCodeAction(
   }
 
   await setInviteCodeVerified(parsed.data.token);
-  return { error: null, verified: true };
+  redirect(`/invite/client/${parsed.data.token}`);
 }
 
 export async function signUpAndAcceptInvite(
@@ -130,7 +126,7 @@ export async function signUpAndAcceptInvite(
   }
 
   const existing = await findUserByEmail(invitation.email);
-  if (existing) {
+  if (existing && !(await isOrphanAppUser(existing.id))) {
     return {
       error: "Ya existe una cuenta. Usá «Ya tengo cuenta».",
     };
@@ -138,15 +134,21 @@ export async function signUpAndAcceptInvite(
 
   let slug: string;
   try {
-    const user = await createUser({
-      email: invitation.email,
-      password,
-      fullName,
-    });
+    let user;
+    if (existing) {
+      await updateUserCredentials(existing.id, { password, fullName });
+      user = existing;
+    } else {
+      user = await createUser({
+        email: invitation.email,
+        password,
+        fullName,
+      });
+    }
+
     await markEmailVerified(user.id);
     slug = await acceptInvitationForUser(token, user.id);
-    const sessionToken = await createSession(user.id);
-    await setSessionCookie(sessionToken);
+    await establishSession(user.id);
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "No se pudo crear la cuenta";
@@ -199,43 +201,7 @@ export async function signInAndAcceptInvite(
   let slug: string;
   try {
     slug = await acceptInvitationForUser(token, user.id);
-    const sessionToken = await createSession(user.id);
-    await setSessionCookie(sessionToken);
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "No se pudo aceptar la invitación";
-    return { error: message };
-  }
-
-  redirect(`/app/${slug}/onboarding`);
-}
-
-export async function acceptInviteAsLoggedIn(
-  token: string,
-): Promise<InviteActionState> {
-  const currentUser = await getCurrentUser();
-  if (!currentUser) {
-    return { error: "No hay sesión activa" };
-  }
-
-  if (!(await isInviteCodeVerified(token))) {
-    return { error: "Primero ingresá el código de la invitación" };
-  }
-
-  const invitation = await getValidClientInvitation(token);
-  if (!invitation) {
-    return { error: "Invitación no disponible" };
-  }
-
-  if (currentUser.email !== invitation.email) {
-    return {
-      error: `Esta invitación es para ${invitation.email}.`,
-    };
-  }
-
-  let slug: string;
-  try {
-    slug = await acceptInvitationForUser(token, currentUser.id);
+    await establishSession(user.id);
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "No se pudo aceptar la invitación";

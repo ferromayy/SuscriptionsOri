@@ -4,8 +4,58 @@ import { createDbClient } from "@/lib/db/client";
 import { getAppUrl } from "@/lib/env";
 import { sendVerificationEmail } from "@/lib/email/send-verification";
 import { acceptClientInvitation } from "@/lib/invitations/accept-invitation";
+import {
+  clearPendingPublicSignup,
+  getPendingPublicSignup,
+} from "@/lib/subscribers/pending-signup-cookie";
+import { completePublicSignup } from "@/lib/subscribers/join-subscriber";
 
 const CODE_TTL_MINUTES = 30;
+
+type VerifiedSignupResult = {
+  userId: string;
+  email: string;
+  tenantSlug: string | null;
+  redirectTo: string | null;
+};
+
+async function finishVerifiedSignup(
+  userId: string,
+  email: string,
+): Promise<VerifiedSignupResult> {
+  const pending = await getPendingPublicSignup();
+
+  if (pending) {
+    const result = await completePublicSignup(
+      userId,
+      pending.tenantSlug,
+      pending.planId,
+    );
+    await clearPendingPublicSignup();
+
+    if ("error" in result) {
+      throw new Error(result.error);
+    }
+
+    return {
+      userId,
+      email,
+      tenantSlug: result.slug,
+      redirectTo: `/app/${result.slug}`,
+    };
+  }
+
+  const ownerSlug = await activatePendingTenantForUser(userId, email);
+
+  return {
+    userId,
+    email,
+    tenantSlug: ownerSlug,
+    redirectTo: ownerSlug
+      ? `/app/${ownerSlug}/onboarding`
+      : "/auth/login?verified=1",
+  };
+}
 
 function hashCode(code: string): string {
   return createHash("sha256").update(code).digest("hex");
@@ -101,7 +151,13 @@ export async function verifyEmailCode(
   email: string,
   code: string,
 ): Promise<
-  | { ok: true; userId: string; email: string; tenantSlug: string | null }
+  | {
+      ok: true;
+      userId: string;
+      email: string;
+      tenantSlug: string | null;
+      redirectTo: string | null;
+    }
   | { ok: false; error: string }
 > {
   const normalized = email.trim().toLowerCase();
@@ -123,13 +179,13 @@ export async function verifyEmailCode(
   }
 
   if (user.email_verified_at) {
-    const slug = await activatePendingTenantForUser(user.id, user.email);
-    return {
-      ok: true,
-      userId: user.id,
-      email: user.email,
-      tenantSlug: slug,
-    };
+    try {
+      return { ok: true, ...(await finishVerifiedSignup(user.id, user.email)) };
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "No se pudo completar el registro";
+      return { ok: false, error: message };
+    }
   }
 
   const { data: row } = await db
@@ -149,14 +205,14 @@ export async function verifyEmailCode(
   }
 
   await markEmailVerified(user.id);
-  const tenantSlug = await activatePendingTenantForUser(user.id, user.email);
 
-  return {
-    ok: true,
-    userId: user.id,
-    email: user.email,
-    tenantSlug,
-  };
+  try {
+    return { ok: true, ...(await finishVerifiedSignup(user.id, user.email)) };
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "No se pudo completar el registro";
+    return { ok: false, error: message };
+  }
 }
 
 export async function resendVerificationForEmail(

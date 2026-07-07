@@ -1,4 +1,5 @@
 import { createDbClient } from "@/lib/db/client";
+import { ensureDefaultPlan } from "@/lib/plans/get-plans";
 
 export async function acceptClientInvitation(
   invitationId: string,
@@ -49,4 +50,6 @@ export async function acceptClientInvitation(
   if (invitationError) {
     throw new Error(invitationError.message);
   }
+
+  await ensureDefaultPlan(tenantId);
 }

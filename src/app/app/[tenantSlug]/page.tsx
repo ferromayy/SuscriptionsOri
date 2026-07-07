@@ -1,10 +1,8 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 
-import { logoutAction } from "@/app/auth/actions";
-import { getCurrentUser } from "@/lib/auth/current-user";
-import { getTenantRole, isTenantManager } from "@/lib/auth/permissions";
 import { createDbClient } from "@/lib/db/client";
+import { requireTenantAccess } from "@/lib/tenants/require-tenant-access";
+import { isTenantManager } from "@/lib/auth/permissions";
 
 export default async function TenantDashboardPage({
   params,
@@ -12,27 +10,11 @@ export default async function TenantDashboardPage({
   params: Promise<{ tenantSlug: string }>;
 }) {
   const { tenantSlug } = await params;
-  const user = await getCurrentUser();
-
-  if (!user) {
-    redirect(`/auth/login?next=/app/${tenantSlug}`);
-  }
+  const { user, tenant, role } = await requireTenantAccess(tenantSlug, {
+    nextPath: `/app/${tenantSlug}`,
+  });
 
   const db = createDbClient();
-  const { data: tenant } = await db
-    .from("tenants")
-    .select("id, name, slug, status")
-    .eq("slug", tenantSlug)
-    .maybeSingle();
-
-  if (!tenant) {
-    redirect("/");
-  }
-
-  const role = await getTenantRole(user.id, tenant.id);
-  if (!role) {
-    redirect("/");
-  }
 
   const { count: memberCount } = await db
     .from("tenant_members")
@@ -40,42 +22,67 @@ export default async function TenantDashboardPage({
     .eq("tenant_id", tenant.id)
     .eq("role", "subscriber");
 
+  const { data: subscription } = await db
+    .from("subscriptions")
+    .select("status, plan_id")
+    .eq("tenant_id", tenant.id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  let planName: string | null = null;
+  if (subscription?.plan_id) {
+    const { data: plan } = await db
+      .from("plans")
+      .select("name")
+      .eq("id", subscription.plan_id)
+      .maybeSingle();
+    planName = plan?.name ?? null;
+  }
+
   return (
     <div className="mx-auto max-w-4xl px-6 py-16">
-      <p className="text-sm font-medium uppercase tracking-widest text-slate-400">
-        {tenant.name}
-      </p>
-      <h1 className="mt-2 text-3xl font-semibold">Panel del cliente</h1>
-      <p className="mt-2 text-slate-400">
+      <p className="ori-eyebrow">{tenant.name}</p>
+      <h1 className="ori-title mt-2">
+        {role === "subscriber" ? "Mi suscripción" : "Panel del cliente"}
+      </h1>
+      <p className="mt-2 text-gray-600">
         Sesión: {user.email} · Rol: {role}
       </p>
 
-      {isTenantManager(role) && (
-        <div className="mt-8 grid gap-4 sm:grid-cols-2">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
-            <p className="text-sm text-slate-400">Estado del tenant</p>
-            <p className="mt-2 text-xl font-semibold capitalize">{tenant.status}</p>
-          </div>
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
-            <p className="text-sm text-slate-400">Suscriptos</p>
-            <p className="mt-2 text-3xl font-semibold">{memberCount ?? 0}</p>
-          </div>
+      {role === "subscriber" && (
+        <div className="mt-8 ori-card">
+          <p className="text-sm text-gray-600">Tu plan</p>
+          <p className="mt-2 text-xl font-semibold">
+            {planName ?? "Suscripción activa"}
+          </p>
+          <p className="mt-1 text-sm capitalize text-gray-500">
+            Estado: {subscription?.status ?? "active"}
+          </p>
         </div>
       )}
 
-      <div className="mt-8 flex flex-wrap gap-3">
-        <Link href="/" className="text-sm text-slate-400 hover:text-slate-200">
-          ← Inicio
-        </Link>
-        <form action={logoutAction}>
-          <button
-            type="submit"
-            className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300"
-          >
-            Cerrar sesión
-          </button>
-        </form>
-      </div>
+      {isTenantManager(role) && (
+        <>
+          <div className="mt-8 grid gap-4 sm:grid-cols-2">
+            <div className="ori-card">
+              <p className="text-sm text-gray-600">Estado del tenant</p>
+              <p className="mt-2 text-xl font-semibold capitalize">{tenant.status}</p>
+            </div>
+            <div className="ori-card">
+              <p className="text-sm text-gray-600">Suscriptos</p>
+              <p className="mt-2 text-3xl font-semibold">{memberCount ?? 0}</p>
+            </div>
+          </div>
+          <div className="mt-6">
+            <Link
+              href={`/app/${tenant.slug}/suscriptores`}
+              className="inline-flex rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-800 hover:border-gray-400"
+            >
+              Gestionar registro de suscriptos →
+            </Link>
+          </div>
+        </>
+      )}
     </div>
   );
 }

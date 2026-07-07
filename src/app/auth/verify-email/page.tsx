@@ -6,16 +6,17 @@ import { ResendVerificationForm } from "@/components/auth/resend-verification-fo
 export default async function VerifyEmailPage({
   searchParams,
 }: {
-  searchParams: Promise<{ email?: string }>;
+  searchParams: Promise<{ email?: string; tenant?: string }>;
 }) {
-  const { email } = await searchParams;
+  const { email, tenant } = await searchParams;
+  const isSubscriberFlow = Boolean(tenant);
 
   if (!email) {
     return (
       <div className="flex min-h-full items-center justify-center px-6 py-16">
-        <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900/60 p-8 text-center">
+        <div className="w-full ori-form-shell text-center">
           <h1 className="text-2xl font-semibold">Verificar email</h1>
-          <p className="mt-4 text-slate-400">
+          <p className="mt-4 text-gray-600">
             Abrí el link que te llegó al correo o ingresá tu email abajo.
           </p>
           <div className="mt-6 text-left">
@@ -28,23 +29,25 @@ export default async function VerifyEmailPage({
 
   return (
     <div className="flex min-h-full items-center justify-center px-6 py-16">
-      <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900/60 p-8">
+      <div className="w-full ori-form-shell">
         <h1 className="text-2xl font-semibold">Verificá tu email</h1>
-        <p className="mt-4 text-slate-400">
+        <p className="mt-4 text-gray-600">
           Ingresá el código de 6 dígitos que enviamos a{" "}
-          <strong className="text-slate-200">{email}</strong>. Al confirmarlo se
-          activará tu organización.
+          <strong className="text-gray-800">{email}</strong>. Al confirmarlo{" "}
+          {isSubscriberFlow
+            ? "activaremos tu suscripción."
+            : "se activará tu organización."}
         </p>
         <VerifyCodeForm email={email} />
-        <div className="mt-6 border-t border-slate-800 pt-6">
-          <p className="text-xs text-slate-500">¿No llegó el código?</p>
+        <div className="mt-6 border-t border-gray-200 pt-6">
+          <p className="text-xs text-gray-500">¿No llegó el código?</p>
           <div className="mt-2">
             <ResendVerificationForm email={email} />
           </div>
         </div>
         <Link
           href="/"
-          className="mt-6 inline-block text-sm text-slate-400 hover:text-slate-200"
+          className="mt-6 inline-block text-sm text-gray-600 hover:text-gray-800"
         >
           ← Inicio
         </Link>

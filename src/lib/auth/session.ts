@@ -148,3 +148,24 @@ export async function createUser(input: {
     fullName: data.full_name,
   };
 }
+
+export async function updateUserCredentials(
+  userId: string,
+  input: { password: string; fullName?: string },
+): Promise<void> {
+  const { hashPassword } = await import("@/lib/auth/password");
+  const db = createDbClient();
+  const passwordHash = await hashPassword(input.password);
+
+  const { error } = await db
+    .from("users")
+    .update({
+      password_hash: passwordHash,
+      full_name: input.fullName ?? null,
+    })
+    .eq("id", userId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}

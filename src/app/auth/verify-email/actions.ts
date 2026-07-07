@@ -1,12 +1,11 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
+import { revalidateAdmin } from "@/lib/admin/revalidate";
 import { verifyEmailCode } from "@/lib/auth/email-verification";
-import { setSessionCookie } from "@/lib/auth/cookies";
-import { createSession } from "@/lib/auth/session";
+import { establishSession } from "@/lib/auth/cookies";
 
 export type VerifyCodeState = {
   error: string | null;
@@ -36,14 +35,11 @@ export async function verifyCodeAction(
     return { error: result.error };
   }
 
-  revalidatePath("/admin/tenants");
-  revalidatePath("/admin");
+  revalidateAdmin();
+  await establishSession(result.userId);
 
-  const sessionToken = await createSession(result.userId);
-  await setSessionCookie(sessionToken);
-
-  if (result.tenantSlug) {
-    redirect(`/app/${result.tenantSlug}/onboarding`);
+  if (result.redirectTo) {
+    redirect(result.redirectTo);
   }
 
   redirect("/auth/login?verified=1");

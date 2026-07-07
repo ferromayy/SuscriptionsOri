@@ -1,5 +1,11 @@
 import { Resend } from "resend";
 
+import {
+  handleResendError,
+  isResendConfigured,
+  logDevEmailFallback,
+} from "@/lib/email/delivery";
+
 type SendClientInviteInput = {
   to: string;
   code: string;
@@ -8,27 +14,25 @@ type SendClientInviteInput = {
 };
 
 export type ClientInviteDelivery = {
-  /** true si Resend envió el email; false si solo se registró en consola (dev). */
   emailSent: boolean;
 };
 
 export async function sendClientInviteEmail(
   input: SendClientInviteInput,
 ): Promise<ClientInviteDelivery> {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.EMAIL_FROM;
+  const devFallback = {
+    label: "INVITACIÓN CLIENTE",
+    to: input.to,
+    lines: [
+      `Organización: ${input.tenantName}`,
+      `Código: ${input.code}`,
+      `Link: ${input.inviteUrl}`,
+    ],
+  };
 
-  if (!apiKey || !from) {
+  if (!isResendConfigured()) {
     if (process.env.NODE_ENV === "development") {
-      console.log("\n--- INVITACIÓN CLIENTE (dev, sin Resend) ---");
-      console.log(`Para: ${input.to}`);
-      console.log(`Organización: ${input.tenantName}`);
-      console.log(`Código: ${input.code}`);
-      console.log(`Link: ${input.inviteUrl}`);
-      console.log(
-        "Configurá RESEND_API_KEY y EMAIL_FROM en .env.local para enviar emails reales.",
-      );
-      console.log("----------------------------------------------\n");
+      logDevEmailFallback(devFallback);
       return { emailSent: false };
     }
     throw new Error(
@@ -36,10 +40,10 @@ export async function sendClientInviteEmail(
     );
   }
 
-  const resend = new Resend(apiKey);
+  const resend = new Resend(process.env.RESEND_API_KEY);
 
   const { error } = await resend.emails.send({
-    from,
+    from: process.env.EMAIL_FROM!,
     to: input.to,
     subject: `Invitación a ${input.tenantName} — código ${input.code}`,
     html: `
@@ -68,7 +72,8 @@ export async function sendClientInviteEmail(
   });
 
   if (error) {
-    throw new Error(error.message);
+    await handleResendError(error, devFallback);
+    return { emailSent: false };
   }
 
   return { emailSent: true };

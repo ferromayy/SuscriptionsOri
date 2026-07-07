@@ -20,7 +20,8 @@ export function middleware(request: NextRequest) {
   }
 
   if (pathname.startsWith("/app")) {
-    if (!hasSession) {
+    const isPublicJoin = /^\/app\/[^/]+\/join\/?$/.test(pathname);
+    if (!hasSession && !isPublicJoin) {
       const url = new URL("/auth/login", request.url);
       url.searchParams.set("next", pathname);
       return NextResponse.redirect(url);

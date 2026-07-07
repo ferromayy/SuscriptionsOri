@@ -2,25 +2,86 @@
 
 :root {
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #111827;
+  --muted: #4b5563;
+  --border: #e5e7eb;
+  --card: #f9fafb;
+  --accent: #111827;
+  --accent-foreground: #ffffff;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-card: var(--card);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-space-mono);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-inter), system-ui, sans-serif;
+}
+
+@layer components {
+  .ori-card {
+    @apply rounded-2xl border border-gray-200 bg-gray-50 p-6;
+  }
+
+  .ori-card-solid {
+    @apply rounded-2xl border border-gray-200 bg-white p-6;
+  }
+
+  .ori-input {
+    @apply mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-900 outline-none transition focus:border-gray-400;
+  }
+
+  .ori-input-readonly {
+    @apply mt-1 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-gray-500;
+  }
+
+  .ori-btn-primary {
+    @apply rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800 disabled:opacity-60;
+  }
+
+  .ori-btn-secondary {
+    @apply rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-900 transition hover:border-gray-400 disabled:opacity-60;
+  }
+
+  .ori-eyebrow {
+    @apply text-xs font-medium uppercase tracking-widest text-gray-500;
+  }
+
+  .ori-title {
+    @apply text-3xl font-bold tracking-tight text-gray-900;
+  }
+
+  .ori-subtitle {
+    @apply text-gray-600;
+  }
+
+  .ori-link {
+    @apply text-gray-900 underline underline-offset-4 transition hover:text-gray-600;
+  }
+
+  .ori-nav-link {
+    @apply text-xs font-medium uppercase tracking-widest text-gray-900 transition hover:text-gray-600;
+  }
+
+  .ori-shell {
+    @apply min-h-full bg-white text-gray-900 antialiased;
+  }
+
+  .ori-header {
+    @apply border-b border-gray-200 bg-white/95 backdrop-blur-sm;
+  }
+
+  .ori-form-shell {
+    @apply w-full max-w-md rounded-2xl border border-gray-200 bg-white p-8 shadow-sm;
+  }
 }
