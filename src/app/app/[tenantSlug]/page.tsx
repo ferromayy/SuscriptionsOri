@@ -16,24 +16,18 @@ export default async function TenantDashboardPage({
 
   const db = createDbClient();
 
-  const { count: memberCount } = await db
-    .from("tenant_members")
-    .select("*", { count: "exact", head: true })
+  const { count: memberCount } = await db.from("tenant_members").select("*", { count: "exact", head: true })
     .eq("tenant_id", tenant.id)
     .eq("role", "subscriber");
 
-  const { data: subscription } = await db
-    .from("subscriptions")
-    .select("status, plan_id")
+  const { data: subscription } = await db.from("subscriptions").select("status, plan_id")
     .eq("tenant_id", tenant.id)
     .eq("user_id", user.id)
     .maybeSingle();
 
   let planName: string | null = null;
   if (subscription?.plan_id) {
-    const { data: plan } = await db
-      .from("plans")
-      .select("name")
+    const { data: plan } = await db.from("plans").select("name")
       .eq("id", subscription.plan_id)
       .maybeSingle();
     planName = plan?.name ?? null;

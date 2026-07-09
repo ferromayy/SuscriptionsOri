@@ -31,9 +31,7 @@ export async function getClientInvitationState(
   const db = createDbClient();
   const tokenHash = hashInvitationToken(token);
 
-  const { data: invitation } = await db
-    .from("platform_invitations")
-    .select("id, email, status, expires_at, tenant_id")
+  const { data: invitation } = await db.from("platform_invitations").select("id, email, status, expires_at, tenant_id")
     .eq("token_hash", tokenHash)
     .maybeSingle();
 
@@ -41,9 +39,7 @@ export async function getClientInvitationState(
     return { kind: "not_found" };
   }
 
-  const { data: tenant } = await db
-    .from("tenants")
-    .select("id, name, slug, status")
+  const { data: tenant } = await db.from("tenants").select("id, name, slug, status")
     .eq("id", invitation.tenant_id)
     .maybeSingle();
 

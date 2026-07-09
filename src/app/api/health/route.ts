@@ -22,7 +22,8 @@ export async function GET() {
     const db = createDbClient();
     const { count, error } = await db
       .from("tenants")
-      .select("*", { count: "exact", head: true });
+      .select("*", { count: "exact", head: true })
+      .is("deleted_at", null);
 
     if (error) {
       return NextResponse.json(

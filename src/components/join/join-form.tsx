@@ -158,12 +158,20 @@ export function JoinForm({
             />
           </div>
           <div>
-            <label
-              htmlFor="loginPassword"
-              className="block text-sm text-gray-700"
-            >
-              Contraseña
-            </label>
+            <div className="flex items-center justify-between">
+              <label
+                htmlFor="loginPassword"
+                className="block text-sm text-gray-700"
+              >
+                Contraseña
+              </label>
+              <a
+                href={`/auth/forgot-password?next=${encodeURIComponent(`/app/${tenantSlug}`)}`}
+                className="text-xs text-gray-600 hover:text-gray-900 underline-offset-4 hover:underline"
+              >
+                ¿Olvidaste tu contraseña?
+              </a>
+            </div>
             <input
               id="loginPassword"
               name="password"

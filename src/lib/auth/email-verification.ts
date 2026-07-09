@@ -67,10 +67,8 @@ function generateSixDigitCode(): string {
 
 export async function markEmailVerified(userId: string): Promise<void> {
   const db = createDbClient();
-  await db
-    .from("users")
-    .update({ email_verified_at: new Date().toISOString() })
-    .eq("id", userId);
+  await db.from("users").update({ email_verified_at: new Date().toISOString() })
+    .eq("id", userId).is("deleted_at", null);
   await db
     .from("email_verification_tokens")
     .delete()
@@ -85,9 +83,7 @@ export async function activatePendingTenantForUser(
   const db = createDbClient();
   const normalized = email.trim().toLowerCase();
 
-  const { data: invitation } = await db
-    .from("platform_invitations")
-    .select("id, tenant_id")
+  const { data: invitation } = await db.from("platform_invitations").select("id, tenant_id")
     .eq("email", normalized)
     .eq("status", "pending")
     .maybeSingle();
@@ -96,9 +92,7 @@ export async function activatePendingTenantForUser(
     return null;
   }
 
-  const { data: tenant } = await db
-    .from("tenants")
-    .select("id, slug, status")
+  const { data: tenant } = await db.from("tenants").select("id, slug, status")
     .eq("id", invitation.tenant_id)
     .maybeSingle();
 
@@ -168,9 +162,7 @@ export async function verifyEmailCode(
   }
 
   const db = createDbClient();
-  const { data: user } = await db
-    .from("users")
-    .select("id, email, email_verified_at")
+  const { data: user } = await db.from("users").select("id, email, email_verified_at")
     .eq("email", normalized)
     .maybeSingle();
 
@@ -221,9 +213,7 @@ export async function resendVerificationForEmail(
   const db = createDbClient();
   const normalized = email.trim().toLowerCase();
 
-  const { data: user } = await db
-    .from("users")
-    .select("id, email, full_name, email_verified_at")
+  const { data: user } = await db.from("users").select("id, email, full_name, email_verified_at")
     .eq("email", normalized)
     .maybeSingle();
 

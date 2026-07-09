@@ -58,9 +58,7 @@ export async function getSessionByToken(
     return null;
   }
 
-  const { data: user, error: userError } = await db
-    .from("users")
-    .select("id, email, full_name")
+  const { data: user, error: userError } = await db.from("users").select("id, email, full_name")
     .eq("id", session.user_id)
     .maybeSingle();
 
@@ -91,6 +89,11 @@ export async function deleteSessionById(sessionId: string): Promise<void> {
   await db.from("sessions").delete().eq("id", sessionId);
 }
 
+export async function deleteAllUserSessions(userId: string): Promise<void> {
+  const db = createDbClient();
+  await db.from("sessions").delete().eq("user_id", userId);
+}
+
 export async function findUserByEmail(
   email: string,
 ): Promise<
@@ -99,9 +102,7 @@ export async function findUserByEmail(
   const db = createDbClient();
   const normalized = email.trim().toLowerCase();
 
-  const { data, error } = await db
-    .from("users")
-    .select("id, email, full_name, password_hash, email_verified_at")
+  const { data, error } = await db.from("users").select("id, email, full_name, password_hash, email_verified_at")
     .eq("email", normalized)
     .maybeSingle();
 
@@ -157,9 +158,7 @@ export async function updateUserCredentials(
   const db = createDbClient();
   const passwordHash = await hashPassword(input.password);
 
-  const { error } = await db
-    .from("users")
-    .update({
+  const { error } = await db.from("users").update({
       password_hash: passwordHash,
       full_name: input.fullName ?? null,
     })

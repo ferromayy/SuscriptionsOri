@@ -38,9 +38,17 @@ export function LoginForm({
         />
       </div>
       <div>
-        <label htmlFor="password" className="block text-sm text-gray-700">
-          Contraseña
-        </label>
+        <div className="flex items-center justify-between">
+          <label htmlFor="password" className="block text-sm text-gray-700">
+            Contraseña
+          </label>
+          <a
+            href={`/auth/forgot-password${next !== "/" ? `?next=${encodeURIComponent(next)}` : ""}`}
+            className="text-xs text-gray-600 hover:text-gray-900 underline-offset-4 hover:underline"
+          >
+            ¿Olvidaste tu contraseña?
+          </a>
+        </div>
         <input
           id="password"
           name="password"

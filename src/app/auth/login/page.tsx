@@ -13,7 +13,8 @@ export default function AuthLoginPage({
       <div className="w-full ori-form-shell">
         <h1 className="text-2xl font-semibold">Iniciar sesión</h1>
         <p className="mt-2 text-sm text-gray-600">
-          Para clientes y suscriptos que <strong>ya tienen cuenta</strong>.
+          Para clientes (dueños de organización) y suscriptos que{" "}
+          <strong>ya tienen cuenta</strong>.
         </p>
         <LoginForm searchParams={searchParams} />
         <div className="mt-6 rounded-lg border border-gray-200 bg-white/50 px-4 py-3 text-sm text-gray-600">
@@ -28,6 +29,17 @@ export default function AuthLoginPage({
           >
             Registrarme como suscriptor →
           </Link>
+        </div>
+        <div className="mt-6 border-t border-gray-200 pt-6">
+          <p className="text-xs text-gray-500">
+            ¿Olvidaste tu contraseña?{" "}
+            <Link
+              href="/auth/forgot-password"
+              className="font-medium text-gray-700 hover:text-gray-900"
+            >
+              Recuperarla por email
+            </Link>
+          </p>
         </div>
         <div className="mt-6 border-t border-gray-200 pt-6">
           <p className="text-xs text-gray-500">¿No llegó el email de verificación?</p>

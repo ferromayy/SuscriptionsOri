@@ -12,6 +12,7 @@ import {
 } from "@/lib/invitations/invite-code";
 import { requirePlatformAdmin } from "@/lib/auth/require-admin";
 import { createDbClient } from "@/lib/db/client";
+import { softDeleteById } from "@/lib/db/soft-delete";
 import { deleteTenantWithCleanup } from "@/lib/tenants/delete-tenant";
 import { createTenantSchema } from "@/lib/validations/tenant";
 
@@ -53,9 +54,7 @@ export async function createTenantWithInvitation(
   const { name, slug, ownerEmail } = parsed.data;
   const db = createDbClient();
 
-  const { data: existingSlug } = await db
-    .from("tenants")
-    .select("id")
+  const { data: existingSlug } = await db.from("tenants").select("id")
     .eq("slug", slug)
     .maybeSingle();
 
@@ -99,7 +98,7 @@ export async function createTenantWithInvitation(
     });
 
   if (invitationError) {
-    await db.from("tenants").delete().eq("id", tenant.id);
+    await softDeleteById("tenants", tenant.id);
     return { error: invitationError.message };
   }
 
@@ -145,9 +144,7 @@ export async function regenerateInvitation(
   const admin = await requirePlatformAdmin();
   const db = createDbClient();
 
-  const { data: tenant } = await db
-    .from("tenants")
-    .select("id, status")
+  const { data: tenant } = await db.from("tenants").select("id, status")
     .eq("id", tenantId)
     .maybeSingle();
 
@@ -159,9 +156,7 @@ export async function regenerateInvitation(
     return { error: "El tenant ya está activo, no necesita invitación" };
   }
 
-  const { data: pendingInvite } = await db
-    .from("platform_invitations")
-    .select("id, email")
+  const { data: pendingInvite } = await db.from("platform_invitations").select("id, email")
     .eq("tenant_id", tenantId)
     .eq("status", "pending")
     .maybeSingle();
@@ -170,9 +165,7 @@ export async function regenerateInvitation(
     return { error: "No hay invitación pendiente para este tenant" };
   }
 
-  await db
-    .from("platform_invitations")
-    .update({ status: "revoked" })
+  await db.from("platform_invitations").update({ status: "revoked" })
     .eq("id", pendingInvite.id);
 
   const token = generateInvitationToken();

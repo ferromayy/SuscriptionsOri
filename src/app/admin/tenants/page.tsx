@@ -8,14 +8,10 @@ import { createDbClient } from "@/lib/db/client";
 export default async function TenantsListPage() {
   const db = createDbClient();
 
-  const { data: tenants } = await db
-    .from("tenants")
-    .select("id, name, slug, status, created_at")
+  const { data: tenants } = await db.from("tenants").select("id, name, slug, status, created_at").is("deleted_at", null)
     .order("created_at", { ascending: false });
 
-  const { data: invitations } = await db
-    .from("platform_invitations")
-    .select("tenant_id, email, status, expires_at")
+  const { data: invitations } = await db.from("platform_invitations").select("tenant_id, email, status, expires_at")
     .eq("status", "pending");
 
   const inviteByTenant = new Map(

@@ -1,6 +1,7 @@
 import { createDbClient } from "@/lib/db/client";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { isPlatformAdmin } from "@/lib/auth/permissions";
+import { softDeleteUserAccount  } from "@/lib/db/soft-delete";
 
 export async function updateUserProfile(
   userId: string,
@@ -13,9 +14,7 @@ export async function updateUserProfile(
     return { error: "El nombre debe tener al menos 2 caracteres" };
   }
 
-  const { error } = await db
-    .from("users")
-    .update({ full_name: fullName })
+  const { error } = await db.from("users").update({ full_name: fullName })
     .eq("id", userId);
 
   if (error) {
@@ -32,9 +31,7 @@ export async function changeUserPassword(
 ): Promise<{ error: string | null }> {
   const db = createDbClient();
 
-  const { data: user, error: fetchError } = await db
-    .from("users")
-    .select("password_hash")
+  const { data: user, error: fetchError } = await db.from("users").select("password_hash")
     .eq("id", userId)
     .maybeSingle();
 
@@ -52,9 +49,7 @@ export async function changeUserPassword(
   }
 
   const passwordHash = await hashPassword(newPassword);
-  const { error } = await db
-    .from("users")
-    .update({ password_hash: passwordHash })
+  const { error } = await db.from("users").update({ password_hash: passwordHash })
     .eq("id", userId);
 
   if (error) {
@@ -67,17 +62,13 @@ export async function changeUserPassword(
 async function isSoleOwnerOfActiveTenant(userId: string): Promise<boolean> {
   const db = createDbClient();
 
-  const { data: memberships } = await db
-    .from("tenant_members")
-    .select("tenant_id")
+  const { data: memberships } = await db.from("tenant_members").select("tenant_id")
     .eq("user_id", userId)
     .eq("role", "owner")
     .eq("status", "active");
 
   for (const membership of memberships ?? []) {
-    const { data: tenant } = await db
-      .from("tenants")
-      .select("status")
+    const { data: tenant } = await db.from("tenants").select("status")
       .eq("id", membership.tenant_id)
       .maybeSingle();
 
@@ -85,9 +76,7 @@ async function isSoleOwnerOfActiveTenant(userId: string): Promise<boolean> {
       continue;
     }
 
-    const { count } = await db
-      .from("tenant_members")
-      .select("*", { count: "exact", head: true })
+    const { count } = await db.from("tenant_members").select("*", { count: "exact", head: true })
       .eq("tenant_id", membership.tenant_id)
       .eq("role", "owner")
       .eq("status", "active");
@@ -112,9 +101,7 @@ export async function deleteUserAccount(
   }
 
   const db = createDbClient();
-  const { data: user, error: fetchError } = await db
-    .from("users")
-    .select("id, email, password_hash")
+  const { data: user, error: fetchError } = await db.from("users").select("id, email, password_hash")
     .eq("id", userId)
     .maybeSingle();
 
@@ -134,11 +121,5 @@ export async function deleteUserAccount(
     };
   }
 
-  const { error } = await db.from("users").delete().eq("id", userId);
-
-  if (error) {
-    return { error: error.message };
-  }
-
-  return { error: null };
+  return softDeleteUserAccount(userId);
 }

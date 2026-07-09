@@ -15,9 +15,7 @@ export const getTenantBySlug = cache(async function getTenantBySlug(
   slug: string,
 ): Promise<PublicTenant | null> {
   const db = createDbClient();
-  const { data } = await db
-    .from("tenants")
-    .select("id, name, slug, status, settings")
+  const { data } = await db.from("tenants").select("id, name, slug, status, settings")
     .eq("slug", slug)
     .maybeSingle();
 

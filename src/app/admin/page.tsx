@@ -8,11 +8,10 @@ export default async function AdminDashboardPage() {
 
   const { count: tenantCount } = await db
     .from("tenants")
-    .select("*", { count: "exact", head: true });
-
-  const { count: pendingCount } = await db
-    .from("tenants")
     .select("*", { count: "exact", head: true })
+    .is("deleted_at", null);
+
+  const { count: pendingCount } = await db.from("tenants").select("*", { count: "exact", head: true })
     .eq("status", "pending_owner");
 
   return (

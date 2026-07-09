@@ -20,6 +20,7 @@ drop table if exists public.platform_admins cascade;
 drop table if exists public.tenants cascade;
 drop table if exists public.sessions cascade;
 drop table if exists public.email_verification_tokens cascade;
+drop table if exists public.password_reset_tokens cascade;
 drop table if exists public.users cascade;
 drop table if exists public.profiles cascade;
 
@@ -34,10 +35,13 @@ create table public.users (
   email_verified_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
+  deleted_at timestamptz,
   constraint users_email_lowercase check (email = lower(email))
 );
 
-create unique index users_email_idx on public.users (email);
+create unique index users_email_active_idx on public.users (email)
+  where deleted_at is null;
+create index users_deleted_at_idx on public.users (deleted_at);
 
 create table public.email_verification_tokens (
   id uuid primary key default gen_random_uuid(),
@@ -51,6 +55,19 @@ create unique index email_verification_tokens_code_hash_idx
   on public.email_verification_tokens (code_hash);
 create index email_verification_tokens_user_id_idx
   on public.email_verification_tokens (user_id);
+
+create table public.password_reset_tokens (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.users (id) on delete cascade,
+  token_hash text not null,
+  expires_at timestamptz not null,
+  created_at timestamptz not null default now()
+);
+
+create unique index password_reset_tokens_token_hash_idx
+  on public.password_reset_tokens (token_hash);
+create index password_reset_tokens_user_id_idx
+  on public.password_reset_tokens (user_id);
 
 create table public.sessions (
   id uuid primary key default gen_random_uuid(),
@@ -72,16 +89,19 @@ create table public.platform_admins (
 create table public.tenants (
   id uuid primary key default gen_random_uuid(),
   name text not null,
-  slug text not null unique,
+  slug text not null,
   status text not null default 'pending_owner'
     check (status in ('pending_owner', 'active', 'suspended', 'cancelled')),
   settings jsonb not null default '{"allow_public_signup": true}'::jsonb,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz
 );
 
+create unique index tenants_slug_active_idx on public.tenants (slug)
+  where deleted_at is null;
 create index tenants_status_idx on public.tenants (status);
-create index tenants_slug_idx on public.tenants (slug);
+create index tenants_deleted_at_idx on public.tenants (deleted_at);
 
 create table public.platform_invitations (
   id uuid primary key default gen_random_uuid(),
@@ -94,11 +114,13 @@ create table public.platform_invitations (
     check (status in ('pending', 'accepted', 'expired', 'revoked')),
   expires_at timestamptz not null,
   accepted_at timestamptz,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  deleted_at timestamptz
 );
 
 create index platform_invitations_tenant_id_idx on public.platform_invitations (tenant_id);
 create index platform_invitations_email_idx on public.platform_invitations (lower(email));
+create index platform_invitations_deleted_at_idx on public.platform_invitations (deleted_at);
 
 create table public.tenant_members (
   id uuid primary key default gen_random_uuid(),
@@ -108,11 +130,15 @@ create table public.tenant_members (
   joined_via text not null check (joined_via in ('client_invite', 'public_signup')),
   status text not null default 'active' check (status in ('active', 'inactive')),
   created_at timestamptz not null default now(),
-  unique (tenant_id, user_id)
+  deleted_at timestamptz
 );
 
+create unique index tenant_members_active_unique_idx
+  on public.tenant_members (tenant_id, user_id)
+  where deleted_at is null;
 create index tenant_members_user_id_idx on public.tenant_members (user_id);
 create index tenant_members_tenant_id_idx on public.tenant_members (tenant_id);
+create index tenant_members_deleted_at_idx on public.tenant_members (deleted_at);
 
 create table public.plans (
   id uuid primary key default gen_random_uuid(),
@@ -123,10 +149,12 @@ create table public.plans (
   currency text not null default 'usd',
   interval text not null default 'month' check (interval in ('month', 'year')),
   is_active boolean not null default true,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  deleted_at timestamptz
 );
 
 create index plans_tenant_id_idx on public.plans (tenant_id);
+create index plans_deleted_at_idx on public.plans (deleted_at);
 
 create table public.subscriptions (
   id uuid primary key default gen_random_uuid(),
@@ -137,11 +165,15 @@ create table public.subscriptions (
     check (status in ('trialing', 'active', 'past_due', 'cancelled')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  unique (tenant_id, user_id)
+  deleted_at timestamptz
 );
 
+create unique index subscriptions_active_unique_idx
+  on public.subscriptions (tenant_id, user_id)
+  where deleted_at is null;
 create index subscriptions_tenant_id_idx on public.subscriptions (tenant_id);
 create index subscriptions_user_id_idx on public.subscriptions (user_id);
+create index subscriptions_deleted_at_idx on public.subscriptions (deleted_at);
 
 create or replace function public.set_updated_at()
 returns trigger
@@ -168,6 +200,7 @@ create trigger subscriptions_set_updated_at
 -- Sin RLS: la app valida permisos en Next.js (auth propio + service role)
 alter table public.users disable row level security;
 alter table public.email_verification_tokens disable row level security;
+alter table public.password_reset_tokens disable row level security;
 alter table public.sessions disable row level security;
 alter table public.platform_admins disable row level security;
 alter table public.tenants disable row level security;

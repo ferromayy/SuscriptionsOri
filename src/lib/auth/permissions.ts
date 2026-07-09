@@ -10,7 +10,15 @@ export async function isPlatformAdmin(userId: string): Promise<boolean> {
     .eq("user_id", userId)
     .maybeSingle();
 
-  return Boolean(data);
+  if (!data) {
+    return false;
+  }
+
+  const { data: user } = await db.from("users").select("id")
+    .eq("id", userId)
+    .maybeSingle();
+
+  return Boolean(user);
 }
 
 export async function getTenantRole(
@@ -18,9 +26,7 @@ export async function getTenantRole(
   tenantId: string,
 ): Promise<TenantMemberRole | null> {
   const db = createDbClient();
-  const { data } = await db
-    .from("tenant_members")
-    .select("role")
+  const { data } = await db.from("tenant_members").select("role")
     .eq("user_id", userId)
     .eq("tenant_id", tenantId)
     .eq("status", "active")

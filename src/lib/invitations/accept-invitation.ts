@@ -8,9 +8,7 @@ export async function acceptClientInvitation(
 ): Promise<void> {
   const db = createDbClient();
 
-  const { data: existingMember } = await db
-    .from("tenant_members")
-    .select("id")
+  const { data: existingMember } = await db.from("tenant_members").select("id")
     .eq("tenant_id", tenantId)
     .eq("user_id", userId)
     .maybeSingle();
@@ -29,23 +27,18 @@ export async function acceptClientInvitation(
     }
   }
 
-  const { error: tenantError } = await db
-    .from("tenants")
-    .update({ status: "active" })
+  const { error: tenantError } = await db.from("tenants").update({ status: "active" })
     .eq("id", tenantId);
 
   if (tenantError) {
     throw new Error(tenantError.message);
   }
 
-  const { error: invitationError } = await db
-    .from("platform_invitations")
-    .update({
+  const { error: invitationError } = await db.from("platform_invitations").update({
       status: "accepted",
       accepted_at: new Date().toISOString(),
     })
-    .eq("id", invitationId)
-    .eq("status", "pending");
+    .eq("status", "pending").is("deleted_at", null);
 
   if (invitationError) {
     throw new Error(invitationError.message);

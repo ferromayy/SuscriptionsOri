@@ -20,9 +20,7 @@ export async function ensureSuperAdminExists(): Promise<void> {
 
   const db = createDbClient();
 
-  const { data: existingUser } = await db
-    .from("users")
-    .select("id")
+  const { data: existingUser } = await db.from("users").select("id")
     .eq("email", credentials.email)
     .maybeSingle();
 
@@ -47,10 +45,8 @@ export async function ensureSuperAdminExists(): Promise<void> {
 
     userId = created.id;
   } else {
-    await db
-      .from("users")
-      .update({ email_verified_at: new Date().toISOString() })
-      .eq("id", userId)
+    await db.from("users").update({ email_verified_at: new Date().toISOString() })
+      .eq("id", userId).is("deleted_at", null)
       .is("email_verified_at", null);
   }
 

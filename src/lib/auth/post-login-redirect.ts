@@ -13,9 +13,7 @@ export async function resolvePostLoginRedirect(
   }
 
   const db = createDbClient();
-  const { data: memberships } = await db
-    .from("tenant_members")
-    .select("role, tenant_id")
+  const { data: memberships } = await db.from("tenant_members").select("role, tenant_id")
     .eq("user_id", userId)
     .eq("status", "active");
 
@@ -28,9 +26,7 @@ export async function resolvePostLoginRedirect(
       isTenantManager(membership.role as TenantMemberRole),
     ) ?? memberships[0];
 
-  const { data: tenant } = await db
-    .from("tenants")
-    .select("slug")
+  const { data: tenant } = await db.from("tenants").select("slug")
     .eq("id", preferred.tenant_id)
     .maybeSingle();
 

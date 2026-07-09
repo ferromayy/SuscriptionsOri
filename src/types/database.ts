@@ -36,6 +36,7 @@ export interface Database {
           email_verified_at: string | null;
           created_at: string;
           updated_at: string;
+          deleted_at: string | null;
         };
         Insert: {
           id?: string;
@@ -45,6 +46,7 @@ export interface Database {
           email_verified_at?: string | null;
           created_at?: string;
           updated_at?: string;
+          deleted_at?: string | null;
         };
         Update: {
           id?: string;
@@ -54,6 +56,7 @@ export interface Database {
           email_verified_at?: string | null;
           created_at?: string;
           updated_at?: string;
+          deleted_at?: string | null;
         };
         Relationships: [];
       };
@@ -76,6 +79,30 @@ export interface Database {
           id?: string;
           user_id?: string;
           code_hash?: string;
+          expires_at?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      password_reset_tokens: {
+        Row: {
+          id: string;
+          user_id: string;
+          token_hash: string;
+          expires_at: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          token_hash: string;
+          expires_at: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          token_hash?: string;
           expires_at?: string;
           created_at?: string;
         };
@@ -129,6 +156,7 @@ export interface Database {
           settings: Json;
           created_at: string;
           updated_at: string;
+          deleted_at: string | null;
         };
         Insert: {
           id?: string;
@@ -138,6 +166,7 @@ export interface Database {
           settings?: Json;
           created_at?: string;
           updated_at?: string;
+          deleted_at?: string | null;
         };
         Update: {
           id?: string;
@@ -147,6 +176,7 @@ export interface Database {
           settings?: Json;
           created_at?: string;
           updated_at?: string;
+          deleted_at?: string | null;
         };
         Relationships: [];
       };
@@ -162,6 +192,7 @@ export interface Database {
           expires_at: string;
           accepted_at: string | null;
           created_at: string;
+          deleted_at: string | null;
         };
         Insert: {
           id?: string;
@@ -174,6 +205,7 @@ export interface Database {
           expires_at: string;
           accepted_at?: string | null;
           created_at?: string;
+          deleted_at?: string | null;
         };
         Update: {
           id?: string;
@@ -186,6 +218,7 @@ export interface Database {
           expires_at?: string;
           accepted_at?: string | null;
           created_at?: string;
+          deleted_at?: string | null;
         };
         Relationships: [];
       };
@@ -198,6 +231,7 @@ export interface Database {
           joined_via: JoinedVia;
           status: string;
           created_at: string;
+          deleted_at: string | null;
         };
         Insert: {
           id?: string;
@@ -207,6 +241,7 @@ export interface Database {
           joined_via: JoinedVia;
           status?: string;
           created_at?: string;
+          deleted_at?: string | null;
         };
         Update: {
           id?: string;
@@ -216,6 +251,7 @@ export interface Database {
           joined_via?: JoinedVia;
           status?: string;
           created_at?: string;
+          deleted_at?: string | null;
         };
         Relationships: [];
       };
@@ -230,6 +266,7 @@ export interface Database {
           interval: string;
           is_active: boolean;
           created_at: string;
+          deleted_at: string | null;
         };
         Insert: {
           id?: string;
@@ -241,6 +278,7 @@ export interface Database {
           interval?: string;
           is_active?: boolean;
           created_at?: string;
+          deleted_at?: string | null;
         };
         Update: {
           id?: string;
@@ -252,6 +290,7 @@ export interface Database {
           interval?: string;
           is_active?: boolean;
           created_at?: string;
+          deleted_at?: string | null;
         };
         Relationships: [];
       };
@@ -264,6 +303,7 @@ export interface Database {
           status: SubscriptionStatus;
           created_at: string;
           updated_at: string;
+          deleted_at: string | null;
         };
         Insert: {
           id?: string;
@@ -273,6 +313,7 @@ export interface Database {
           status?: SubscriptionStatus;
           created_at?: string;
           updated_at?: string;
+          deleted_at?: string | null;
         };
         Update: {
           id?: string;
@@ -282,6 +323,7 @@ export interface Database {
           status?: SubscriptionStatus;
           created_at?: string;
           updated_at?: string;
+          deleted_at?: string | null;
         };
         Relationships: [];
       };

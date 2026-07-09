@@ -18,7 +18,7 @@ import {
   findUserByEmail,
   updateUserCredentials,
 } from "@/lib/auth/session";
-import { isOrphanAppUser } from "@/lib/auth/user-cleanup";
+import { isOrphanAppUser, otherOrganizationErrorMessage, userHasActiveMembershipInOtherTenant } from "@/lib/auth/user-cleanup";
 import { getActivePlansForTenant } from "@/lib/plans/get-plans";
 import { setPendingPublicSignup } from "@/lib/subscribers/pending-signup-cookie";
 import { completePublicSignup } from "@/lib/subscribers/join-subscriber";
@@ -110,7 +110,7 @@ async function validateSubscriberSignupEmail(
 
   if (!(await isOrphanAppUser(existing.id))) {
     return {
-      error: "Ya existe una cuenta con este email. Usá «Ya tengo cuenta».",
+      error: otherOrganizationErrorMessage(),
     };
   }
 
@@ -228,6 +228,10 @@ export async function signInAndJoinAsSubscriber(
     await setPendingPublicSignup({ tenantSlug, planId });
     await createAndSendVerificationCode(user.id, email, user.fullName);
     redirect(getCheckEmailUrl(email, tenantSlug));
+  }
+
+  if (await userHasActiveMembershipInOtherTenant(user.id, context.tenantId)) {
+    return { error: otherOrganizationErrorMessage() };
   }
 
   const result = await completePublicSignup(user.id, tenantSlug, planId);

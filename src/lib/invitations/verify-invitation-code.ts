@@ -12,9 +12,7 @@ export async function verifyInvitationCode(
   }
 
   const db = createDbClient();
-  const { data: invitation } = await db
-    .from("platform_invitations")
-    .select("id, status, expires_at, verification_code_hash")
+  const { data: invitation } = await db.from("platform_invitations").select("id, status, expires_at, verification_code_hash")
     .eq("token_hash", hashInvitationToken(inviteToken))
     .maybeSingle();
 

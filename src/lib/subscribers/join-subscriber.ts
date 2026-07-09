@@ -1,4 +1,5 @@
 import { createDbClient } from "@/lib/db/client";
+import { otherOrganizationErrorMessage, userHasActiveMembershipInOtherTenant } from "@/lib/auth/user-cleanup";
 import { getTenantBySlug } from "@/lib/tenants/get-tenant-by-slug";
 
 export async function completePublicSignup(
@@ -22,9 +23,7 @@ export async function completePublicSignup(
 
   const db = createDbClient();
 
-  const { data: plan } = await db
-    .from("plans")
-    .select("id")
+  const { data: plan } = await db.from("plans").select("id")
     .eq("id", planId)
     .eq("tenant_id", tenant.id)
     .eq("is_active", true)
@@ -34,9 +33,11 @@ export async function completePublicSignup(
     return { error: "Plan no disponible" };
   }
 
-  const { data: existingMember } = await db
-    .from("tenant_members")
-    .select("id, role")
+  if (await userHasActiveMembershipInOtherTenant(userId, tenant.id)) {
+    return { error: otherOrganizationErrorMessage() };
+  }
+
+  const { data: existingMember } = await db.from("tenant_members").select("id, role")
     .eq("tenant_id", tenant.id)
     .eq("user_id", userId)
     .maybeSingle();
@@ -57,9 +58,7 @@ export async function completePublicSignup(
     return { error: memberError.message };
   }
 
-  const { data: existingSub } = await db
-    .from("subscriptions")
-    .select("id")
+  const { data: existingSub } = await db.from("subscriptions").select("id")
     .eq("tenant_id", tenant.id)
     .eq("user_id", userId)
     .maybeSingle();

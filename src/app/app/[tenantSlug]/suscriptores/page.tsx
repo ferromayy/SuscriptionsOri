@@ -22,9 +22,7 @@ export default async function TenantSubscribersPage({
   const joinUrl = getTenantJoinUrl(tenant.slug);
   const joinPath = `/app/${tenant.slug}/join?preview=1`;
 
-  const { count: subscriberCount } = await db
-    .from("tenant_members")
-    .select("*", { count: "exact", head: true })
+  const { count: subscriberCount } = await db.from("tenant_members").select("*", { count: "exact", head: true })
     .eq("tenant_id", tenant.id)
     .eq("role", "subscriber");
 

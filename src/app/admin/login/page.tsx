@@ -1,12 +1,20 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { AdminLoginForm } from "@/components/auth/admin-login-form";
+import { getCurrentUser } from "@/lib/auth/current-user";
+import { isPlatformAdmin } from "@/lib/auth/permissions";
 
-export default function AdminLoginPage({
+export default async function AdminLoginPage({
   searchParams,
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
+  const user = await getCurrentUser();
+  if (user && (await isPlatformAdmin(user.id))) {
+    redirect("/admin");
+  }
+
   return (
     <div className="flex min-h-full items-center justify-center px-6 py-16">
       <div className="w-full ori-form-shell">

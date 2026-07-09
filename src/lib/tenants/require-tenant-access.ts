@@ -21,6 +21,14 @@ export type TenantAccess = {
   role: TenantMemberRole;
 };
 
+function tenantPortalBlocked(status: string): boolean {
+  return status !== "active";
+}
+
+export function tenantUnavailablePath(slug: string): string {
+  return `/app/${slug}/unavailable`;
+}
+
 export async function requireTenantAccess(
   tenantSlug: string,
   options: RequireTenantAccessOptions,
@@ -35,6 +43,10 @@ export async function requireTenantAccess(
 
   if (!tenant) {
     redirect("/");
+  }
+
+  if (tenantPortalBlocked(tenant.status)) {
+    redirect(tenantUnavailablePath(tenant.slug));
   }
 
   const role = await getTenantRole(user.id, tenant.id);
