@@ -13,6 +13,10 @@ drop function if exists public.is_tenant_member(uuid) cascade;
 drop function if exists public.set_updated_at() cascade;
 
 drop table if exists public.subscriptions cascade;
+drop table if exists public.subscription_choices cascade;
+drop table if exists public.tenant_mp_connections cascade;
+drop table if exists public.plan_field_options cascade;
+drop table if exists public.plan_fields cascade;
 drop table if exists public.plans cascade;
 drop table if exists public.tenant_members cascade;
 drop table if exists public.platform_invitations cascade;
@@ -145,9 +149,12 @@ create table public.plans (
   tenant_id uuid not null references public.tenants (id) on delete cascade,
   name text not null,
   description text,
+  internal_label text,
   price_cents integer not null default 0 check (price_cents >= 0),
-  currency text not null default 'usd',
+  currency text not null default 'ars',
   interval text not null default 'month' check (interval in ('month', 'year')),
+  field_count smallint not null default 0 check (field_count >= 0 and field_count <= 5),
+  sort_order integer not null default 0,
   is_active boolean not null default true,
   created_at timestamptz not null default now(),
   deleted_at timestamptz
@@ -156,20 +163,127 @@ create table public.plans (
 create index plans_tenant_id_idx on public.plans (tenant_id);
 create index plans_deleted_at_idx on public.plans (deleted_at);
 
+create table public.plan_fields (
+  id uuid primary key default gen_random_uuid(),
+  plan_id uuid not null references public.plans (id) on delete cascade,
+  sort_order smallint not null default 1 check (sort_order >= 1 and sort_order <= 5),
+  label text not null,
+  field_type text not null check (field_type in ('select', 'text')),
+  affects_price boolean not null default false,
+  is_required boolean not null default true,
+  created_at timestamptz not null default now(),
+  deleted_at timestamptz
+);
+
+create index plan_fields_plan_id_idx on public.plan_fields (plan_id);
+create index plan_fields_deleted_at_idx on public.plan_fields (deleted_at);
+
+create table public.plan_field_options (
+  id uuid primary key default gen_random_uuid(),
+  field_id uuid not null references public.plan_fields (id) on delete cascade,
+  label text not null,
+  price_delta_cents integer not null default 0 check (price_delta_cents >= 0),
+  sort_order smallint not null default 1,
+  created_at timestamptz not null default now(),
+  deleted_at timestamptz
+);
+
+create index plan_field_options_field_id_idx on public.plan_field_options (field_id);
+create index plan_field_options_deleted_at_idx on public.plan_field_options (deleted_at);
+
 create table public.subscriptions (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid not null references public.tenants (id) on delete cascade,
   user_id uuid not null references public.users (id) on delete cascade,
   plan_id uuid not null references public.plans (id) on delete restrict,
-  status text not null default 'trialing'
-    check (status in ('trialing', 'active', 'past_due', 'cancelled')),
+  status text not null default 'pending_payment'
+    check (status in ('pending_payment', 'trialing', 'active', 'past_due', 'cancelled')),
+  final_price_cents integer check (final_price_cents is null or final_price_cents >= 0),
+  contact_email text,
+  contact_phone text,
+  contact_first_name text,
+  contact_last_name text,
+  delivery_method text
+    check (
+      delivery_method is null
+      or delivery_method in ('shipping', 'andreani', 'store_pickup')
+    ),
+  delivery_details jsonb not null default '{}'::jsonb,
+  payment_reference text,
+  payment_method text
+    check (
+      payment_method is null
+      or payment_method in ('card_monthly', 'card_annual', 'transfer')
+    ),
+  billing_interval text
+    check (
+      billing_interval is null
+      or billing_interval in ('month', 'year')
+    ),
+  mp_preapproval_id text,
+  mp_init_point text,
+  payment_status text
+    check (
+      payment_status is null
+      or payment_status in ('pending', 'authorized', 'paused', 'cancelled')
+    ),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   deleted_at timestamptz
 );
 
+create table public.tenant_mp_connections (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references public.tenants (id) on delete cascade,
+  mp_user_id text,
+  access_token text not null,
+  refresh_token text,
+  token_expires_at timestamptz,
+  live_mode boolean not null default false,
+  status text not null default 'connected'
+    check (status in ('connected', 'disconnected', 'error')),
+  transfer_cbu text,
+  transfer_alias text,
+  transfer_holder_name text,
+  connected_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz,
+  unique (tenant_id)
+);
+
+create index tenant_mp_connections_tenant_id_idx
+  on public.tenant_mp_connections (tenant_id);
+create index tenant_mp_connections_deleted_at_idx
+  on public.tenant_mp_connections (deleted_at);
+create index subscriptions_mp_preapproval_id_idx
+  on public.subscriptions (mp_preapproval_id);
+
+create table public.subscription_choices (
+  id uuid primary key default gen_random_uuid(),
+  subscription_id uuid not null references public.subscriptions (id) on delete cascade,
+  field_id uuid not null references public.plan_fields (id) on delete restrict,
+  option_id uuid references public.plan_field_options (id) on delete restrict,
+  text_value text,
+  created_at timestamptz not null default now(),
+  deleted_at timestamptz,
+  constraint subscription_choices_value_check check (
+    (option_id is not null and text_value is null)
+    or (option_id is null and text_value is not null and length(trim(text_value)) > 0)
+  )
+);
+
+create unique index subscription_choices_active_unique_idx
+  on public.subscription_choices (subscription_id, field_id)
+  where deleted_at is null;
+
+create index subscription_choices_subscription_id_idx
+  on public.subscription_choices (subscription_id);
+
+create index subscription_choices_deleted_at_idx
+  on public.subscription_choices (deleted_at);
+
 create unique index subscriptions_active_unique_idx
-  on public.subscriptions (tenant_id, user_id)
+  on public.subscriptions (tenant_id, user_id, plan_id)
   where deleted_at is null;
 create index subscriptions_tenant_id_idx on public.subscriptions (tenant_id);
 create index subscriptions_user_id_idx on public.subscriptions (user_id);
@@ -207,4 +321,8 @@ alter table public.tenants disable row level security;
 alter table public.platform_invitations disable row level security;
 alter table public.tenant_members disable row level security;
 alter table public.plans disable row level security;
+alter table public.plan_fields disable row level security;
+alter table public.plan_field_options disable row level security;
 alter table public.subscriptions disable row level security;
+alter table public.subscription_choices disable row level security;
+alter table public.tenant_mp_connections disable row level security;

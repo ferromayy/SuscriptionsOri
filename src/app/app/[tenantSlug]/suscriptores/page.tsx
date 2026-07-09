@@ -37,6 +37,15 @@ export default async function TenantSubscribersPage({
         quedarán asociados a tu organización.
       </p>
 
+      <div className="mt-6">
+        <Link
+          href={`/app/${tenant.slug}/suscripciones`}
+          className="text-sm text-gray-700 underline-offset-4 hover:underline"
+        >
+          Gestionar tipos de suscripción →
+        </Link>
+      </div>
+
       <section className="mt-8 ori-card">
         <h2 className="text-lg font-medium text-gray-900">Link público</h2>
         <p className="mt-2 text-sm text-gray-600">
@@ -81,10 +90,10 @@ export default async function TenantSubscribersPage({
       {plans.length > 0 && (
         <section className="mt-8 ori-card">
           <h2 className="text-lg font-medium text-gray-900">
-            Planes en el formulario
+            Suscripciones en el formulario
           </h2>
           <p className="mt-2 text-sm text-gray-600">
-            Estos son los planes que verán al registrarse.
+            Estas son las suscripciones activas que verán al registrarse.
           </p>
           <ul className="mt-4 space-y-3">
             {plans.map((plan) => (

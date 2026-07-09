@@ -1,5 +1,7 @@
 import { cookies } from "next/headers";
 
+import type { CheckoutDetailsInput } from "@/lib/subscribers/checkout-schemas";
+
 export const PENDING_SIGNUP_COOKIE = "pending_public_signup";
 
 const MAX_AGE_SECONDS = 60 * 30;
@@ -7,6 +9,12 @@ const MAX_AGE_SECONDS = 60 * 30;
 export type PendingPublicSignup = {
   tenantSlug: string;
   planId: string;
+  fieldChoices: Array<{
+    fieldId: string;
+    optionId?: string;
+    textValue?: string;
+  }>;
+  checkout: CheckoutDetailsInput;
 };
 
 export async function setPendingPublicSignup(
@@ -31,7 +39,12 @@ export async function getPendingPublicSignup(): Promise<PendingPublicSignup | nu
 
   try {
     const parsed = JSON.parse(raw) as PendingPublicSignup;
-    if (!parsed.tenantSlug || !parsed.planId) {
+    if (
+      !parsed.tenantSlug ||
+      !parsed.planId ||
+      !Array.isArray(parsed.fieldChoices) ||
+      !parsed.checkout
+    ) {
       return null;
     }
     return parsed;

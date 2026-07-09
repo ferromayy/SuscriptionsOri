@@ -34,14 +34,23 @@ export function TenantNav({
                 Panel
               </Link>
               {isManager && (
-                <Link href={`${base}/suscriptores`} className="ori-nav-link">
-                  Suscriptores
-                </Link>
+                <>
+                  <Link href={`${base}/suscripciones`} className="ori-nav-link">
+                    Suscripciones
+                  </Link>
+                  <Link href={`${base}/suscriptores`} className="ori-nav-link">
+                    Suscriptores
+                  </Link>
+                  <Link href={`${base}/pagos`} className="ori-nav-link">
+                    Pagos
+                  </Link>
+                </>
               )}
               <Link href={`${base}/cuenta`} className="ori-nav-link">
                 Mi cuenta
               </Link>
               <form action={logoutAction}>
+                <input type="hidden" name="tenantSlug" value={tenantSlug} />
                 <button type="submit" className="ori-nav-link">
                   Salir
                 </button>

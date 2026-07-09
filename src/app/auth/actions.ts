@@ -9,7 +9,9 @@ import {
   clearCurrentSession,
   establishSession,
 } from "@/lib/auth/cookies";
+import { getCurrentUser } from "@/lib/auth/current-user";
 import { resolvePostLoginRedirect } from "@/lib/auth/post-login-redirect";
+import { resolvePostLogoutRedirect } from "@/lib/auth/post-logout-redirect";
 import { isPlatformAdmin } from "@/lib/auth/permissions";
 import { verifyPassword } from "@/lib/auth/password";
 import { findUserByEmail } from "@/lib/auth/session";
@@ -110,7 +112,17 @@ export async function resendVerificationAction(
   };
 }
 
-export async function logoutAction(): Promise<void> {
+export async function logoutAction(formData: FormData): Promise<void> {
+  const user = await getCurrentUser();
+  const tenantSlug = String(formData.get("tenantSlug") ?? "").trim();
+
+  let destination = "/";
+  if (tenantSlug) {
+    destination = `/app/${tenantSlug}/join`;
+  } else if (user) {
+    destination = await resolvePostLogoutRedirect(user.id);
+  }
+
   await clearCurrentSession();
-  redirect("/");
+  redirect(destination);
 }

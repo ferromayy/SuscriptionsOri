@@ -3,10 +3,9 @@
 import { useActionState, useMemo, useState } from "react";
 
 import {
-  signInAndJoinAsSubscriber,
-  signUpAsSubscriber,
-  type JoinActionState,
-} from "@/app/app/[tenantSlug]/join/actions";
+  subscribeLoggedInSubscriber,
+  type SubscriptionActionState,
+} from "@/app/app/[tenantSlug]/mi-suscripcion/actions";
 import {
   calculateLivePlanPrice,
   formatPlanPrice,
@@ -20,12 +19,11 @@ import type {
   PaymentMethod,
 } from "@/lib/subscribers/checkout-schemas";
 
-const initialState: JoinActionState = { error: null };
+const initialState: SubscriptionActionState = { error: null };
 
-type AuthMode = "signup" | "login";
-type CheckoutStep = "plan" | "contact" | "delivery" | "payment" | "account";
+type AddStep = "plan" | "contact" | "delivery" | "payment";
 
-export type JoinPaymentOptions = {
+export type ManagePaymentOptions = {
   cardsEnabled: boolean;
   transferEnabled: boolean;
   transferAlias: string | null;
@@ -75,6 +73,28 @@ function arePlanFieldsComplete(
   });
 }
 
+function choicesToInitialState(choices: SubscriptionChoiceSeed[]) {
+  const selectedOptions: Record<string, string> = {};
+  const textValues: Record<string, string> = {};
+
+  for (const choice of choices) {
+    if (choice.optionId) {
+      selectedOptions[choice.fieldId] = choice.optionId;
+    }
+    if (choice.textValue) {
+      textValues[choice.fieldId] = choice.textValue;
+    }
+  }
+
+  return { selectedOptions, textValues };
+}
+
+type SubscriptionChoiceSeed = {
+  fieldId: string;
+  optionId: string | null;
+  textValue: string | null;
+};
+
 function isContactComplete(contact: {
   email: string;
   phone: string;
@@ -113,22 +133,30 @@ function isDeliveryComplete(
   return false;
 }
 
-export function JoinForm({
+export function ManageSubscriptionForm({
   tenantSlug,
   plans,
+  mode,
+  lockedPlanId,
+  initialChoices = [],
+  submitLabel,
   paymentOptions,
 }: {
   tenantSlug: string;
   plans: PublicPlan[];
-  paymentOptions: JoinPaymentOptions;
+  mode: "add" | "edit";
+  lockedPlanId?: string;
+  initialChoices?: SubscriptionChoiceSeed[];
+  submitLabel: string;
+  paymentOptions?: ManagePaymentOptions;
 }) {
-  const [authMode, setAuthMode] = useState<AuthMode>("signup");
-  const [step, setStep] = useState<CheckoutStep>("plan");
-  const [selectedPlanId, setSelectedPlanId] = useState("");
-  const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>(
-    {},
+  const initial = choicesToInitialState(initialChoices);
+  const [step, setStep] = useState<AddStep>("plan");
+  const [selectedPlanId, setSelectedPlanId] = useState(lockedPlanId ?? "");
+  const [selectedOptions, setSelectedOptions] = useState(
+    initial.selectedOptions,
   );
-  const [textValues, setTextValues] = useState<Record<string, string>>({});
+  const [textValues, setTextValues] = useState(initial.textValues);
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [firstName, setFirstName] = useState("");
@@ -139,12 +167,8 @@ export function JoinForm({
   );
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | "">("");
   const [paymentReference, setPaymentReference] = useState("");
-  const [signUpState, signUpAction, signUpPending] = useActionState(
-    signUpAsSubscriber,
-    initialState,
-  );
-  const [signInState, signInAction, signInPending] = useActionState(
-    signInAndJoinAsSubscriber,
+  const [state, formAction, pending] = useActionState(
+    subscribeLoggedInSubscriber,
     initialState,
   );
 
@@ -161,9 +185,13 @@ export function JoinForm({
   const livePrice = selectedPlan
     ? calculateLivePlanPrice(selectedPlan, selectedOptions)
     : 0;
-
-  const contact = { email, phone, firstName, lastName };
-  const contactComplete = isContactComplete(contact);
+  const planReady = Boolean(selectedPlanId) && fieldsComplete;
+  const contactComplete = isContactComplete({
+    email,
+    phone,
+    firstName,
+    lastName,
+  });
   const deliveryComplete = isDeliveryComplete(deliveryMethod, deliveryDetails);
   const paymentComplete =
     paymentMethod === "card_monthly" ||
@@ -171,6 +199,7 @@ export function JoinForm({
     (paymentMethod === "transfer" && paymentReference.trim().length > 0);
 
   const checkoutPayload: CheckoutDetailsInput | null =
+    mode === "add" &&
     deliveryMethod &&
     deliveryMethod !== "store_pickup" &&
     paymentMethod
@@ -185,10 +214,6 @@ export function JoinForm({
           paymentReference: paymentReference.trim() || undefined,
         }
       : null;
-
-  const error = authMode === "signup" ? signUpState.error : signInState.error;
-  const pending = authMode === "signup" ? signUpPending : signInPending;
-  const planReady = Boolean(selectedPlanId) && fieldsComplete;
 
   function handlePlanChange(planId: string) {
     setSelectedPlanId(planId);
@@ -205,6 +230,115 @@ export function JoinForm({
     setDeliveryDetails({});
   }
 
+  if (mode === "edit") {
+    return (
+      <div className="mt-8">
+        {selectedPlan && (
+          <div className="ori-card">
+            <p className="text-sm text-gray-600">Suscripción</p>
+            <p className="mt-2 text-xl font-semibold text-gray-900">
+              {selectedPlan.name}
+            </p>
+            <p className="mt-1 text-sm text-gray-600">
+              {formatPlanPrice(selectedPlan)}
+            </p>
+          </div>
+        )}
+
+        {selectedPlan && selectedPlan.fields.length > 0 && (
+          <fieldset className="mt-6 space-y-4 rounded-lg border border-gray-200 p-4">
+            <legend className="px-1 text-sm font-medium text-gray-900">
+              Actualizá las opciones
+            </legend>
+            {selectedPlan.fields.map((field) => (
+              <div key={field.id}>
+                <label
+                  htmlFor={`field-${field.id}`}
+                  className="block text-sm text-gray-700"
+                >
+                  {field.label}
+                </label>
+                {field.fieldType === "select" ? (
+                  <select
+                    id={`field-${field.id}`}
+                    value={selectedOptions[field.id] ?? ""}
+                    onChange={(event) =>
+                      setSelectedOptions((current) => ({
+                        ...current,
+                        [field.id]: event.target.value,
+                      }))
+                    }
+                    className="ori-input mt-1"
+                    required
+                  >
+                    <option value="">Elegí una opción</option>
+                    {field.options.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.label}
+                        {field.affectsPrice && option.priceDeltaCents > 0
+                          ? ` (+${formatCents(option.priceDeltaCents, selectedPlan.currency).replace(/ \/ mes$/, "")})`
+                          : ""}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    id={`field-${field.id}`}
+                    value={textValues[field.id] ?? ""}
+                    onChange={(event) =>
+                      setTextValues((current) => ({
+                        ...current,
+                        [field.id]: event.target.value,
+                      }))
+                    }
+                    className="ori-input mt-1"
+                    required
+                  />
+                )}
+              </div>
+            ))}
+            {fieldsComplete && (
+              <p className="text-sm font-medium text-gray-900">
+                Total:{" "}
+                {formatCents(
+                  livePrice,
+                  selectedPlan.currency,
+                  selectedPlan.interval,
+                )}
+              </p>
+            )}
+          </fieldset>
+        )}
+
+        {planReady && (
+          <form action={formAction} className="mt-6">
+            <input type="hidden" name="tenantSlug" value={tenantSlug} />
+            <input type="hidden" name="planId" value={selectedPlanId} />
+            <input type="hidden" name="requireCheckout" value="0" />
+            <input
+              type="hidden"
+              name="fieldChoices"
+              value={JSON.stringify(fieldChoices)}
+            />
+            <button
+              type="submit"
+              disabled={pending}
+              className="ori-btn-primary w-full disabled:opacity-60"
+            >
+              {pending ? "Guardando..." : submitLabel}
+            </button>
+          </form>
+        )}
+
+        {state.error && (
+          <p className="mt-4 text-sm text-red-600" role="alert">
+            {state.error}
+          </p>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="mt-8">
       <div className="mb-6 flex flex-wrap gap-2 text-xs">
@@ -214,7 +348,6 @@ export function JoinForm({
             ["contact", "2. Contacto"],
             ["delivery", "3. Entrega"],
             ["payment", "4. Pago"],
-            ["account", "5. Cuenta"],
           ] as const
         ).map(([key, label]) => (
           <span
@@ -256,21 +389,10 @@ export function JoinForm({
                   <span className="block text-sm text-gray-600">
                     {formatPlanPrice(plan)}
                   </span>
-                  {plan.description && (
-                    <span className="mt-1 block text-xs text-gray-500">
-                      {plan.description}
-                    </span>
-                  )}
                 </span>
               </label>
             ))}
           </fieldset>
-
-          {!selectedPlanId && (
-            <p className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
-              Elegí una suscripción para continuar.
-            </p>
-          )}
 
           {selectedPlan && selectedPlan.fields.length > 0 && (
             <fieldset className="mt-6 space-y-4 rounded-lg border border-gray-200 p-4">
@@ -280,14 +402,14 @@ export function JoinForm({
               {selectedPlan.fields.map((field) => (
                 <div key={field.id}>
                   <label
-                    htmlFor={`field-${field.id}`}
+                    htmlFor={`add-field-${field.id}`}
                     className="block text-sm text-gray-700"
                   >
                     {field.label}
                   </label>
                   {field.fieldType === "select" ? (
                     <select
-                      id={`field-${field.id}`}
+                      id={`add-field-${field.id}`}
                       value={selectedOptions[field.id] ?? ""}
                       onChange={(event) =>
                         setSelectedOptions((current) => ({
@@ -296,21 +418,17 @@ export function JoinForm({
                         }))
                       }
                       className="ori-input mt-1"
-                      required
                     >
                       <option value="">Elegí una opción</option>
                       {field.options.map((option) => (
                         <option key={option.id} value={option.id}>
                           {option.label}
-                          {field.affectsPrice && option.priceDeltaCents > 0
-                            ? ` (+${formatCents(option.priceDeltaCents, selectedPlan.currency).replace(/ \/ mes$/, "")})`
-                            : ""}
                         </option>
                       ))}
                     </select>
                   ) : (
                     <input
-                      id={`field-${field.id}`}
+                      id={`add-field-${field.id}`}
                       value={textValues[field.id] ?? ""}
                       onChange={(event) =>
                         setTextValues((current) => ({
@@ -319,21 +437,10 @@ export function JoinForm({
                         }))
                       }
                       className="ori-input mt-1"
-                      required
                     />
                   )}
                 </div>
               ))}
-              {fieldsComplete && (
-                <p className="text-sm font-medium text-gray-900">
-                  Total:{" "}
-                  {formatCents(
-                    livePrice,
-                    selectedPlan.currency,
-                    selectedPlan.interval,
-                  )}
-                </p>
-              )}
             </fieldset>
           )}
 
@@ -352,60 +459,15 @@ export function JoinForm({
       {step === "contact" && (
         <section className="space-y-4">
           <h2 className="text-lg font-medium text-gray-900">Datos de contacto</h2>
-          <div>
-            <label htmlFor="contactEmail" className="block text-sm text-gray-700">
-              Correo electrónico
-            </label>
-            <input
-              id="contactEmail"
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              className="ori-input mt-1"
-              autoComplete="email"
-              required
-            />
-          </div>
-          <div>
-            <label htmlFor="contactPhone" className="block text-sm text-gray-700">
-              Número de teléfono
-            </label>
-            <input
-              id="contactPhone"
-              type="tel"
-              value={phone}
-              onChange={(event) => setPhone(event.target.value)}
-              className="ori-input mt-1"
-              autoComplete="tel"
-              required
-            />
-          </div>
-          <div>
-            <label htmlFor="contactFirstName" className="block text-sm text-gray-700">
-              Nombre
-            </label>
-            <input
-              id="contactFirstName"
-              value={firstName}
-              onChange={(event) => setFirstName(event.target.value)}
-              className="ori-input mt-1"
-              autoComplete="given-name"
-              required
-            />
-          </div>
-          <div>
-            <label htmlFor="contactLastName" className="block text-sm text-gray-700">
-              Apellido
-            </label>
-            <input
-              id="contactLastName"
-              value={lastName}
-              onChange={(event) => setLastName(event.target.value)}
-              className="ori-input mt-1"
-              autoComplete="family-name"
-              required
-            />
-          </div>
+          <Input
+            label="Correo electrónico"
+            type="email"
+            value={email}
+            onChange={setEmail}
+          />
+          <Input label="Número de teléfono" value={phone} onChange={setPhone} />
+          <Input label="Nombre" value={firstName} onChange={setFirstName} />
+          <Input label="Apellido" value={lastName} onChange={setLastName} />
           <StepNav
             onBack={() => setStep("plan")}
             onNext={() => setStep("delivery")}
@@ -431,7 +493,7 @@ export function JoinForm({
                   deliveryMethod === value
                     ? "border-gray-900 bg-gray-100"
                     : "border-gray-200"
-                } ${value === "store_pickup" ? "opacity-70" : ""}`}
+                }`}
               >
                 <input
                   type="radio"
@@ -455,48 +517,47 @@ export function JoinForm({
 
           {deliveryMethod === "shipping" && (
             <div className="space-y-4 rounded-lg border border-gray-200 p-4">
-              <Field
+              <Input
                 label="Provincia"
                 value={deliveryDetails.province ?? ""}
                 onChange={(value) => updateDeliveryDetail("province", value)}
               />
-              <Field
+              <Input
                 label="Barrio"
                 value={deliveryDetails.neighborhood ?? ""}
                 onChange={(value) => updateDeliveryDetail("neighborhood", value)}
               />
-              <Field
+              <Input
                 label="Código postal"
                 value={deliveryDetails.postalCode ?? ""}
                 onChange={(value) => updateDeliveryDetail("postalCode", value)}
               />
-              <Field
+              <Input
                 label="Dirección"
                 value={deliveryDetails.address ?? ""}
                 onChange={(value) => updateDeliveryDetail("address", value)}
               />
-              <Field
+              <Input
                 label="Depto"
                 value={deliveryDetails.apartment ?? ""}
                 onChange={(value) => updateDeliveryDetail("apartment", value)}
-                required={false}
               />
             </div>
           )}
 
           {deliveryMethod === "andreani" && (
             <div className="space-y-4 rounded-lg border border-gray-200 p-4">
-              <Field
+              <Input
                 label="Código postal (para elegir tu sucursal más cercana)"
                 value={deliveryDetails.postalCode ?? ""}
                 onChange={(value) => updateDeliveryDetail("postalCode", value)}
               />
-              <Field
+              <Input
                 label="Dirección"
                 value={deliveryDetails.address ?? ""}
                 onChange={(value) => updateDeliveryDetail("address", value)}
               />
-              <Field
+              <Input
                 label="Número"
                 value={deliveryDetails.number ?? ""}
                 onChange={(value) => updateDeliveryDetail("number", value)}
@@ -506,8 +567,7 @@ export function JoinForm({
 
           {deliveryMethod === "store_pickup" && (
             <p className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
-              Retiro en tienda amiga estará disponible próximamente. Elegí Envío o
-              Sucursal Andreani para continuar.
+              Retiro en tienda amiga estará disponible próximamente.
             </p>
           )}
 
@@ -519,7 +579,7 @@ export function JoinForm({
         </section>
       )}
 
-      {step === "payment" && (
+      {step === "payment" && checkoutPayload && paymentOptions && (
         <section className="space-y-4">
           <h2 className="text-lg font-medium text-gray-900">Pago</h2>
           {selectedPlan && (
@@ -589,174 +649,59 @@ export function JoinForm({
                   {paymentOptions.transferCbu}
                 </p>
               )}
-              <div>
-                <label
-                  htmlFor="paymentReference"
-                  className="block text-sm text-gray-700"
-                >
-                  Referencia / comprobante
-                </label>
-                <input
-                  id="paymentReference"
-                  value={paymentReference}
-                  onChange={(event) => setPaymentReference(event.target.value)}
-                  className="ori-input mt-1"
-                  placeholder="Ej. número de operación"
-                  required
-                />
-              </div>
+              <Input
+                label="Referencia / comprobante"
+                value={paymentReference}
+                onChange={setPaymentReference}
+              />
             </div>
           )}
 
           {(paymentMethod === "card_monthly" ||
             paymentMethod === "card_annual") && (
             <p className="text-xs text-gray-500">
-              Al finalizar el registro te vamos a llevar a Mercado Pago para
-              cargar tu tarjeta y autorizar el cobro recurrente.
+              Al confirmar te vamos a llevar a Mercado Pago para cargar tu
+              tarjeta y autorizar el cobro recurrente.
             </p>
           )}
 
-          <StepNav
-            onBack={() => setStep("delivery")}
-            onNext={() => setStep("account")}
-            nextDisabled={!paymentComplete}
-          />
+          <form action={formAction} className="space-y-3">
+            <input type="hidden" name="tenantSlug" value={tenantSlug} />
+            <input type="hidden" name="planId" value={selectedPlanId} />
+            <input type="hidden" name="requireCheckout" value="1" />
+            <input
+              type="hidden"
+              name="fieldChoices"
+              value={JSON.stringify(fieldChoices)}
+            />
+            <input
+              type="hidden"
+              name="checkout"
+              value={JSON.stringify(checkoutPayload)}
+            />
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => setStep("delivery")}
+                className="ori-btn-secondary"
+              >
+                Anterior
+              </button>
+              <button
+                type="submit"
+                disabled={pending || !paymentComplete}
+                className="ori-btn-primary disabled:opacity-60"
+              >
+                {pending ? "Guardando..." : submitLabel}
+              </button>
+            </div>
+          </form>
         </section>
       )}
 
-      {step === "account" && checkoutPayload && (
-        <>
-          <div className="mb-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
-            <p>
-              {firstName} {lastName} · {email} · {phone}
-            </p>
-            <p className="mt-1">
-              Entrega:{" "}
-              {deliveryMethod === "shipping"
-                ? "Envío"
-                : deliveryMethod === "andreani"
-                  ? "Sucursal Andreani"
-                  : "—"}
-            </p>
-          </div>
-
-          <div className="flex rounded-lg border border-gray-200 p-1">
-            <button
-              type="button"
-              onClick={() => setAuthMode("signup")}
-              className={`flex-1 rounded-md px-3 py-2 text-sm ${
-                authMode === "signup"
-                  ? "bg-gray-900 text-white"
-                  : "text-gray-600 hover:text-gray-800"
-              }`}
-            >
-              Crear cuenta
-            </button>
-            <button
-              type="button"
-              onClick={() => setAuthMode("login")}
-              className={`flex-1 rounded-md px-3 py-2 text-sm ${
-                authMode === "login"
-                  ? "bg-gray-900 text-white"
-                  : "text-gray-600 hover:text-gray-800"
-              }`}
-            >
-              Ya tengo cuenta
-            </button>
-          </div>
-
-          {authMode === "signup" ? (
-            <form action={signUpAction} className="mt-6 space-y-4">
-              <input type="hidden" name="tenantSlug" value={tenantSlug} />
-              <input type="hidden" name="planId" value={selectedPlanId} />
-              <input
-                type="hidden"
-                name="fieldChoices"
-                value={JSON.stringify(fieldChoices)}
-              />
-              <input
-                type="hidden"
-                name="checkout"
-                value={JSON.stringify(checkoutPayload)}
-              />
-              <div>
-                <label htmlFor="password" className="block text-sm text-gray-700">
-                  Contraseña
-                </label>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  required
-                  minLength={8}
-                  autoComplete="new-password"
-                  className="ori-input mt-1"
-                />
-              </div>
-              <SubmitButton
-                pending={pending}
-                label="Crear cuenta y verificar email"
-              />
-            </form>
-          ) : (
-            <form action={signInAction} className="mt-6 space-y-4">
-              <input type="hidden" name="tenantSlug" value={tenantSlug} />
-              <input type="hidden" name="planId" value={selectedPlanId} />
-              <input
-                type="hidden"
-                name="fieldChoices"
-                value={JSON.stringify(fieldChoices)}
-              />
-              <input
-                type="hidden"
-                name="checkout"
-                value={JSON.stringify(checkoutPayload)}
-              />
-              <input type="hidden" name="email" value={email} />
-              <div>
-                <div className="flex items-center justify-between">
-                  <label
-                    htmlFor="loginPassword"
-                    className="block text-sm text-gray-700"
-                  >
-                    Contraseña
-                  </label>
-                  <a
-                    href={`/auth/forgot-password?next=${encodeURIComponent(`/app/${tenantSlug}`)}`}
-                    className="text-xs text-gray-600 hover:text-gray-900 underline-offset-4 hover:underline"
-                  >
-                    ¿Olvidaste tu contraseña?
-                  </a>
-                </div>
-                <input
-                  id="loginPassword"
-                  name="password"
-                  type="password"
-                  required
-                  autoComplete="current-password"
-                  className="ori-input mt-1"
-                />
-              </div>
-              <SubmitButton
-                pending={pending}
-                label="Iniciar sesión y suscribirme"
-              />
-            </form>
-          )}
-
-          <button
-            type="button"
-            onClick={() => setStep("payment")}
-            className="ori-btn-secondary mt-4 w-full"
-          >
-            Anterior
-          </button>
-        </>
-      )}
-
-      {error && (
+      {state.error && (
         <p className="mt-4 text-sm text-red-600" role="alert">
-          {error}
+          {state.error}
         </p>
       )}
     </div>
@@ -795,16 +740,16 @@ function PaymentOption({
   );
 }
 
-function Field({
+function Input({
   label,
   value,
   onChange,
-  required = true,
+  type = "text",
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
-  required?: boolean;
+  type?: string;
 }) {
   const id = label.toLowerCase().replace(/\s+/g, "-");
   return (
@@ -814,10 +759,10 @@ function Field({
       </label>
       <input
         id={id}
+        type={type}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         className="ori-input mt-1"
-        required={required}
       />
     </div>
   );
@@ -846,23 +791,5 @@ function StepNav({
         Continuar
       </button>
     </div>
-  );
-}
-
-function SubmitButton({
-  pending,
-  label,
-}: {
-  pending: boolean;
-  label: string;
-}) {
-  return (
-    <button
-      type="submit"
-      disabled={pending}
-      className="ori-btn-primary w-full disabled:opacity-60"
-    >
-      {pending ? "Procesando..." : label}
-    </button>
   );
 }

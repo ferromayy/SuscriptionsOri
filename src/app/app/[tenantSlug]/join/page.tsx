@@ -4,10 +4,8 @@ import { redirect } from "next/navigation";
 import { JoinForm } from "@/components/join/join-form";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { getTenantRole, isTenantManager } from "@/lib/auth/permissions";
-import {
-  ensureDefaultPlan,
-  getActivePlansForTenant,
-} from "@/lib/plans/get-plans";
+import { getTenantMpConnection } from "@/lib/mercadopago/oauth";
+import { getActivePlansForTenant } from "@/lib/plans/get-plans";
 import { getTenantBySlug } from "@/lib/tenants/get-tenant-by-slug";
 
 export default async function TenantJoinPage({
@@ -59,29 +57,42 @@ export default async function TenantJoinPage({
     );
   }
 
-  let loggedInAsManager = false;
-
   if (currentUser) {
     const role = await getTenantRole(currentUser.id, tenant.id);
     if (role === "subscriber") {
       redirect(`/app/${tenant.slug}`);
     }
-    loggedInAsManager = isTenantManager(role);
   }
 
-  await ensureDefaultPlan(tenant.id);
   const plans = await getActivePlansForTenant(tenant.id);
+  const mpConnection = await getTenantMpConnection(tenant.id);
+  const paymentOptions = {
+    cardsEnabled: Boolean(mpConnection),
+    transferEnabled: Boolean(
+      mpConnection?.transferAlias || mpConnection?.transferCbu,
+    ),
+    transferAlias: mpConnection?.transferAlias ?? null,
+    transferCbu: mpConnection?.transferCbu ?? null,
+    transferHolderName: mpConnection?.transferHolderName ?? null,
+  };
 
   if (plans.length === 0) {
     return (
       <JoinShell tenantName={tenant.name}>
         <h1 className="text-2xl font-semibold">{tenant.name}</h1>
         <p className="mt-2 text-gray-600">
-          Todavía no hay planes disponibles. Pedile al administrador que
-          configure uno.
+          Todavía no hay suscripciones disponibles. Pedile al administrador que
+          configure una en el panel.
         </p>
       </JoinShell>
     );
+  }
+
+  let loggedInAsManager = false;
+
+  if (currentUser) {
+    const role = await getTenantRole(currentUser.id, tenant.id);
+    loggedInAsManager = isTenantManager(role);
   }
 
   return (
@@ -113,14 +124,18 @@ export default async function TenantJoinPage({
       </p>
       <h1 className="mt-2 text-2xl font-semibold">Unite a {tenant.name}</h1>
       <p className="mt-4 text-gray-600">
-        Elegí un plan y creá tu cuenta. Te enviaremos un código de verificación
-        por email.
+        Elegí una suscripción y completá contacto, entrega y pago para crear tu
+        cuenta.
       </p>
-      <JoinForm tenantSlug={tenant.slug} plans={plans} />
+      <JoinForm
+        tenantSlug={tenant.slug}
+        plans={plans}
+        paymentOptions={paymentOptions}
+      />
       <p className="mt-6 text-center text-sm text-gray-500">
         ¿Ya tenés cuenta?{" "}
         <Link
-          href={`/auth/login?next=/app/${tenant.slug}`}
+          href={`/auth/login?next=/app/${tenant.slug}/join`}
           className="text-gray-700 hover:text-gray-600"
         >
           Iniciar sesión

@@ -30,6 +30,8 @@ async function finishVerifiedSignup(
       userId,
       pending.tenantSlug,
       pending.planId,
+      pending.fieldChoices,
+      pending.checkout,
     );
     await clearPendingPublicSignup();
 
@@ -41,7 +43,7 @@ async function finishVerifiedSignup(
       userId,
       email,
       tenantSlug: result.slug,
-      redirectTo: `/app/${result.slug}`,
+      redirectTo: result.redirectUrl ?? `/app/${result.slug}`,
     };
   }
 

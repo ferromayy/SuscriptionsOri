@@ -18,8 +18,19 @@ import {
   findUserByEmail,
   updateUserCredentials,
 } from "@/lib/auth/session";
-import { isOrphanAppUser, otherOrganizationErrorMessage, userHasActiveMembershipInOtherTenant } from "@/lib/auth/user-cleanup";
+import {
+  isOrphanAppUser,
+  otherOrganizationErrorMessage,
+  userHasActiveMembershipInOtherTenant,
+} from "@/lib/auth/user-cleanup";
 import { getActivePlansForTenant } from "@/lib/plans/get-plans";
+import { loadResolvedPlan } from "@/lib/plans/load-resolved-plan";
+import { validateFieldChoices } from "@/lib/plans/pricing-utils";
+import { fieldChoiceSchema, type FieldChoiceInput } from "@/lib/plans/schemas";
+import {
+  checkoutDetailsSchema,
+  type CheckoutDetailsInput,
+} from "@/lib/subscribers/checkout-schemas";
 import { setPendingPublicSignup } from "@/lib/subscribers/pending-signup-cookie";
 import { completePublicSignup } from "@/lib/subscribers/join-subscriber";
 import { getTenantBySlug } from "@/lib/tenants/get-tenant-by-slug";
@@ -28,17 +39,45 @@ export type JoinActionState = {
   error: string | null;
 };
 
+function parseFieldChoices(raw: FormDataEntryValue | null) {
+  if (!raw || typeof raw !== "string" || raw.trim() === "") {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return z.array(fieldChoiceSchema).parse(parsed);
+  } catch {
+    return null;
+  }
+}
+
+function parseCheckout(raw: FormDataEntryValue | null) {
+  if (!raw || typeof raw !== "string") {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    const result = checkoutDetailsSchema.safeParse(parsed);
+    if (!result.success) {
+      return { error: result.error.issues[0]?.message ?? "Datos de checkout inválidos" };
+    }
+    return { data: result.data };
+  } catch {
+    return { error: "No se pudieron leer los datos de contacto y entrega" };
+  }
+}
+
 const signUpSchema = z.object({
   tenantSlug: z.string().min(1),
-  planId: z.string().uuid("Elegí un plan"),
-  fullName: z.string().trim().min(2, "Ingresá tu nombre"),
-  email: z.string().email("Email inválido"),
+  planId: z.string().uuid("Elegí una suscripción"),
   password: passwordSchema,
 });
 
 const signInSchema = z.object({
   tenantSlug: z.string().min(1),
-  planId: z.string().uuid("Elegí un plan"),
+  planId: z.string().uuid("Elegí una suscripción"),
   email: z.string().email("Email inválido"),
   password: passwordSchema,
 });
@@ -71,6 +110,24 @@ async function validateJoinContext(
   return { tenantId: tenant.id };
 }
 
+async function validateSubscriptionSelection(
+  tenantId: string,
+  planId: string,
+  fieldChoices: FieldChoiceInput[],
+): Promise<{ error: string } | { ok: true }> {
+  const plan = await loadResolvedPlan(planId, tenantId);
+  if (!plan) {
+    return { error: "Elegí una suscripción válida" };
+  }
+
+  const validation = validateFieldChoices(plan, fieldChoices);
+  if ("error" in validation) {
+    return { error: validation.error };
+  }
+
+  return { ok: true };
+}
+
 async function releaseSessionForDifferentEmail(email: string): Promise<void> {
   const current = await getCurrentUser();
   if (!current) {
@@ -97,7 +154,7 @@ async function validateSubscriberSignupEmail(
   if (role === "subscriber") {
     return {
       error:
-        "Ya sos suscriptor de esta organización. Usá «Ya tengo cuenta».",
+        "Ya tenés cuenta acá. Usá «Ya tengo cuenta» para agregar otra suscripción o actualizar una existente.",
     };
   }
 
@@ -117,15 +174,28 @@ async function validateSubscriberSignupEmail(
   return { existing };
 }
 
+function fullNameFromCheckout(checkout: CheckoutDetailsInput): string {
+  return `${checkout.firstName} ${checkout.lastName}`.trim();
+}
+
 export async function signUpAsSubscriber(
   _prev: JoinActionState,
   formData: FormData,
 ): Promise<JoinActionState> {
+  const fieldChoices = parseFieldChoices(formData.get("fieldChoices"));
+  if (fieldChoices === null) {
+    return { error: "Las opciones elegidas no son válidas" };
+  }
+
+  const checkoutParsed = parseCheckout(formData.get("checkout"));
+  if (!checkoutParsed || "error" in checkoutParsed) {
+    return { error: checkoutParsed?.error ?? "Completá contacto, entrega y pago" };
+  }
+  const checkout = checkoutParsed.data;
+
   const parsed = signUpSchema.safeParse({
     tenantSlug: formData.get("tenantSlug"),
     planId: formData.get("planId"),
-    fullName: formData.get("fullName"),
-    email: formData.get("email"),
     password: formData.get("password"),
   });
 
@@ -135,11 +205,22 @@ export async function signUpAsSubscriber(
     };
   }
 
-  const { tenantSlug, planId, fullName, email, password } = parsed.data;
+  const { tenantSlug, planId, password } = parsed.data;
+  const email = checkout.email;
+  const fullName = fullNameFromCheckout(checkout);
   const context = await validateJoinContext(tenantSlug, planId);
 
   if ("error" in context) {
     return { error: context.error };
+  }
+
+  const subscriptionValidation = await validateSubscriptionSelection(
+    context.tenantId,
+    planId,
+    fieldChoices,
+  );
+  if ("error" in subscriptionValidation) {
+    return { error: subscriptionValidation.error };
   }
 
   await releaseSessionForDifferentEmail(email);
@@ -165,7 +246,12 @@ export async function signUpAsSubscriber(
       userId = user.id;
     }
 
-    await setPendingPublicSignup({ tenantSlug, planId });
+    await setPendingPublicSignup({
+      tenantSlug,
+      planId,
+      fieldChoices,
+      checkout,
+    });
 
     if (!alreadyVerified) {
       await createAndSendVerificationCode(userId, email, fullName);
@@ -177,12 +263,18 @@ export async function signUpAsSubscriber(
   }
 
   if (alreadyVerified) {
-    const result = await completePublicSignup(userId, tenantSlug, planId);
+    const result = await completePublicSignup(
+      userId,
+      tenantSlug,
+      planId,
+      fieldChoices,
+      checkout,
+    );
     if ("error" in result) {
       return { error: result.error };
     }
     await establishSession(userId);
-    redirect(`/app/${result.slug}`);
+    redirect(result.redirectUrl ?? `/app/${result.slug}`);
   }
 
   redirect(getCheckEmailUrl(email, tenantSlug));
@@ -192,10 +284,21 @@ export async function signInAndJoinAsSubscriber(
   _prev: JoinActionState,
   formData: FormData,
 ): Promise<JoinActionState> {
+  const fieldChoices = parseFieldChoices(formData.get("fieldChoices"));
+  if (fieldChoices === null) {
+    return { error: "Las opciones elegidas no son válidas" };
+  }
+
+  const checkoutParsed = parseCheckout(formData.get("checkout"));
+  if (!checkoutParsed || "error" in checkoutParsed) {
+    return { error: checkoutParsed?.error ?? "Completá contacto, entrega y pago" };
+  }
+  const checkout = checkoutParsed.data;
+
   const parsed = signInSchema.safeParse({
     tenantSlug: formData.get("tenantSlug"),
     planId: formData.get("planId"),
-    email: formData.get("email"),
+    email: formData.get("email") || checkout.email,
     password: formData.get("password"),
   });
 
@@ -212,6 +315,15 @@ export async function signInAndJoinAsSubscriber(
     return { error: context.error };
   }
 
+  const subscriptionValidation = await validateSubscriptionSelection(
+    context.tenantId,
+    planId,
+    fieldChoices,
+  );
+  if ("error" in subscriptionValidation) {
+    return { error: subscriptionValidation.error };
+  }
+
   await releaseSessionForDifferentEmail(email);
 
   const user = await findUserByEmail(email);
@@ -225,7 +337,12 @@ export async function signInAndJoinAsSubscriber(
   }
 
   if (!user.emailVerifiedAt) {
-    await setPendingPublicSignup({ tenantSlug, planId });
+    await setPendingPublicSignup({
+      tenantSlug,
+      planId,
+      fieldChoices,
+      checkout,
+    });
     await createAndSendVerificationCode(user.id, email, user.fullName);
     redirect(getCheckEmailUrl(email, tenantSlug));
   }
@@ -234,11 +351,17 @@ export async function signInAndJoinAsSubscriber(
     return { error: otherOrganizationErrorMessage() };
   }
 
-  const result = await completePublicSignup(user.id, tenantSlug, planId);
+  const result = await completePublicSignup(
+    user.id,
+    tenantSlug,
+    planId,
+    fieldChoices,
+    checkout,
+  );
   if ("error" in result) {
     return { error: result.error };
   }
 
   await establishSession(user.id);
-  redirect(`/app/${result.slug}`);
+  redirect(result.redirectUrl ?? `/app/${result.slug}`);
 }

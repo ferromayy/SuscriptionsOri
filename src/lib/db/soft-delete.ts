@@ -135,6 +135,7 @@ export async function softDeleteTenantWithCleanup(
     "plans",
     "tenant_members",
     "platform_invitations",
+    "tenant_mp_connections",
   ] as const;
 
   for (const table of childTables) {
@@ -146,6 +147,62 @@ export async function softDeleteTenantWithCleanup(
 
     if (error) {
       return { error: error.message };
+    }
+  }
+
+  const { data: tenantPlans } = await db
+    .from("plans")
+    .select("id")
+    .eq("tenant_id", tenantId);
+
+  const planIds = (tenantPlans ?? []).map((plan) => plan.id);
+  if (planIds.length > 0) {
+    const { data: planFields } = await db
+      .from("plan_fields")
+      .select("id")
+      .in("plan_id", planIds);
+
+    const fieldIds = (planFields ?? []).map((field) => field.id);
+    if (fieldIds.length > 0) {
+      const { error: optionsError } = await db
+        .from("plan_field_options")
+        .update({ deleted_at: deletedAt })
+        .in("field_id", fieldIds)
+        .is("deleted_at", null);
+
+      if (optionsError) {
+        return { error: optionsError.message };
+      }
+    }
+
+    const { error: fieldsError } = await db
+      .from("plan_fields")
+      .update({ deleted_at: deletedAt })
+      .in("plan_id", planIds)
+      .is("deleted_at", null);
+
+    if (fieldsError) {
+      return { error: fieldsError.message };
+    }
+  }
+
+  const { data: tenantSubscriptions } = await db
+    .from("subscriptions")
+    .select("id")
+    .eq("tenant_id", tenantId);
+
+  const subscriptionIds = (tenantSubscriptions ?? []).map(
+    (subscription) => subscription.id,
+  );
+  if (subscriptionIds.length > 0) {
+    const { error: choicesError } = await db
+      .from("subscription_choices")
+      .update({ deleted_at: deletedAt })
+      .in("subscription_id", subscriptionIds)
+      .is("deleted_at", null);
+
+    if (choicesError) {
+      return { error: choicesError.message };
     }
   }
 
