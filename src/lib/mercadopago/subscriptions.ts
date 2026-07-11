@@ -59,13 +59,22 @@ export async function createPendingPreapproval(
     sandbox_init_point?: string;
     status?: string;
     message?: string;
+    error?: string;
+    cause?: Array<{ code?: string; description?: string }>;
   };
 
   if (!response.ok || !data.id) {
-    throw new Error(data.message ?? "No se pudo crear la suscripción en Mercado Pago");
+    const cause = data.cause?.[0]?.description;
+    throw new Error(
+      cause || data.message || data.error || "No se pudo crear la suscripción en Mercado Pago",
+    );
   }
 
-  const initPoint = data.init_point || data.sandbox_init_point;
+  const useTestToken = process.env.MP_USE_TEST_TOKEN === "true";
+  const initPoint = useTestToken
+    ? data.sandbox_init_point || data.init_point
+    : data.init_point || data.sandbox_init_point;
+
   if (!initPoint) {
     throw new Error("Mercado Pago no devolvió un link de pago");
   }

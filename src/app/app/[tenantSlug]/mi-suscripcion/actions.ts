@@ -210,11 +210,11 @@ export async function resumeSubscriptionPaymentAction(
     return { error: "No hay un medio de pago con tarjeta para retomar" };
   }
 
-  if (subscription.mp_init_point) {
-    redirect(subscription.mp_init_point);
-  }
-
-  const payerEmail = subscription.contact_email || user.email;
+  // Always create a fresh preapproval: old init_point links often break
+  // after a failed/abandoned checkout (MP SUB03 errors).
+  const payerEmail = (subscription.contact_email || user.email || "")
+    .trim()
+    .toLowerCase();
   if (!payerEmail) {
     return { error: "Falta el email de contacto para retomar el pago" };
   }
@@ -232,6 +232,10 @@ export async function resumeSubscriptionPaymentAction(
     billingInterval === "year"
       ? centsToPesos(subscription.final_price_cents ?? 0) * 12
       : centsToPesos(subscription.final_price_cents ?? 0);
+
+  if (amountPesos <= 0) {
+    return { error: "El monto de la suscripción no es válido" };
+  }
 
   try {
     const preapproval = await createPendingPreapproval({
