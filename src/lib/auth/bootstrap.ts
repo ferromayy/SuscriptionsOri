@@ -22,6 +22,7 @@ export async function ensureSuperAdminExists(): Promise<void> {
 
   const { data: existingUser } = await db.from("users").select("id")
     .eq("email", credentials.email)
+    .is("deleted_at", null)
     .maybeSingle();
 
   let userId = existingUser?.id;

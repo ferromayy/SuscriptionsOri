@@ -166,6 +166,7 @@ export async function verifyEmailCode(
   const db = createDbClient();
   const { data: user } = await db.from("users").select("id, email, email_verified_at")
     .eq("email", normalized)
+    .is("deleted_at", null)
     .maybeSingle();
 
   if (!user) {
@@ -217,6 +218,7 @@ export async function resendVerificationForEmail(
 
   const { data: user } = await db.from("users").select("id, email, full_name, email_verified_at")
     .eq("email", normalized)
+    .is("deleted_at", null)
     .maybeSingle();
 
   if (!user) {

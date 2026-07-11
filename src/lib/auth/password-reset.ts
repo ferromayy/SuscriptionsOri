@@ -21,6 +21,7 @@ async function userCanResetPassword(userId: string): Promise<boolean> {
 
   const { data: user } = await db.from("users").select("email_verified_at")
     .eq("id", userId)
+    .is("deleted_at", null)
     .maybeSingle();
 
   if (!user?.email_verified_at) {
@@ -29,7 +30,8 @@ async function userCanResetPassword(userId: string): Promise<boolean> {
 
   const { count } = await db.from("tenant_members").select("*", { count: "exact", head: true })
     .eq("user_id", userId)
-    .eq("status", "active");
+    .eq("status", "active")
+    .is("deleted_at", null);
 
   return (count ?? 0) > 0;
 }
@@ -42,6 +44,7 @@ export async function requestPasswordReset(
 
   const { data: user } = await db.from("users").select("id, email, full_name")
     .eq("email", normalized)
+    .is("deleted_at", null)
     .maybeSingle();
 
   if (!user || !(await userCanResetPassword(user.id))) {
@@ -113,6 +116,7 @@ export async function validatePasswordResetToken(
 
   const { data: user } = await db.from("users").select("id, email")
     .eq("id", row.user_id)
+    .is("deleted_at", null)
     .maybeSingle();
 
   if (!user) {
