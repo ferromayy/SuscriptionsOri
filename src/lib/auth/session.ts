@@ -60,6 +60,7 @@ export async function getSessionByToken(
 
   const { data: user, error: userError } = await db.from("users").select("id, email, full_name")
     .eq("id", session.user_id)
+    .is("deleted_at", null)
     .maybeSingle();
 
   if (userError || !user) {
@@ -104,6 +105,7 @@ export async function findUserByEmail(
 
   const { data, error } = await db.from("users").select("id, email, full_name, password_hash, email_verified_at")
     .eq("email", normalized)
+    .is("deleted_at", null)
     .maybeSingle();
 
   if (error || !data) {

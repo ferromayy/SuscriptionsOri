@@ -7,7 +7,8 @@ const OTHER_ORG_ERROR =
 export async function userHasAnyTenantMembership(userId: string): Promise<boolean> {
   const db = createDbClient();
   const { count } = await db.from("tenant_members").select("*", { count: "exact", head: true })
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .is("deleted_at", null);
 
   return (count ?? 0) > 0;
 }
@@ -20,6 +21,7 @@ export async function userHasActiveMembershipInOtherTenant(
   const { count } = await db.from("tenant_members").select("*", { count: "exact", head: true })
     .eq("user_id", userId)
     .eq("status", "active")
+    .is("deleted_at", null)
     .neq("tenant_id", tenantId);
 
   return (count ?? 0) > 0;

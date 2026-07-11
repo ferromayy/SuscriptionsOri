@@ -16,6 +16,7 @@ export async function isPlatformAdmin(userId: string): Promise<boolean> {
 
   const { data: user } = await db.from("users").select("id")
     .eq("id", userId)
+    .is("deleted_at", null)
     .maybeSingle();
 
   return Boolean(user);
@@ -30,6 +31,7 @@ export async function getTenantRole(
     .eq("user_id", userId)
     .eq("tenant_id", tenantId)
     .eq("status", "active")
+    .is("deleted_at", null)
     .maybeSingle();
 
   return (data?.role as TenantMemberRole | undefined) ?? null;
