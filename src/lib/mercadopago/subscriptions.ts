@@ -20,7 +20,42 @@ export type PreapprovalResult = {
   id: string;
   initPoint: string;
   status: string;
+  liveMode: boolean | null;
+  sandboxInitPoint: string | null;
+  productionInitPoint: string | null;
 };
+
+export type PreapprovalRemote = {
+  id: string;
+  status: string;
+  external_reference?: string;
+  payer_email?: string;
+  collector_id?: number;
+  application_id?: number;
+  init_point?: string;
+  sandbox_init_point?: string;
+  live_mode?: boolean;
+  auto_recurring?: {
+    frequency?: number;
+    frequency_type?: string;
+    transaction_amount?: number | string;
+    currency_id?: string;
+  };
+  summarized?: Record<string, unknown>;
+};
+
+function buildRecurrence(input: CreatePreapprovalInput) {
+  // MP preapproval only documents frequency_type: days | months (not years).
+  const frequency = input.billingInterval === "year" ? 12 : 1;
+  const amount = Math.round(input.amountPesos * 100) / 100;
+
+  return {
+    frequency,
+    frequency_type: "months" as const,
+    transaction_amount: amount,
+    currency_id: "ARS",
+  };
+}
 
 export async function createPendingPreapproval(
   input: CreatePreapprovalInput,
@@ -30,7 +65,27 @@ export async function createPendingPreapproval(
     throw new Error("Este comercio todavía no conectó Mercado Pago");
   }
 
-  const frequencyType = input.billingInterval === "year" ? "years" : "months";
+  const payerEmail = input.payerEmail.trim().toLowerCase();
+  const autoRecurring = buildRecurrence(input);
+  const payload = {
+    reason: input.reason,
+    external_reference: input.externalReference,
+    payer_email: payerEmail,
+    auto_recurring: autoRecurring,
+    back_url: input.backUrl,
+    status: "pending",
+  };
+
+  console.info("[mercadopago] create preapproval request", {
+    tenantId: input.tenantId,
+    payerEmail,
+    amount: autoRecurring.transaction_amount,
+    frequency: autoRecurring.frequency,
+    frequencyType: autoRecurring.frequency_type,
+    externalReference: input.externalReference,
+    backUrl: input.backUrl,
+    useTestToken: process.env.MP_USE_TEST_TOKEN === "true",
+  });
 
   const response = await fetch(`${getMpApiBaseUrl()}/preapproval`, {
     method: "POST",
@@ -38,35 +93,36 @@ export async function createPendingPreapproval(
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      reason: input.reason,
-      external_reference: input.externalReference,
-      payer_email: input.payerEmail,
-      auto_recurring: {
-        frequency: 1,
-        frequency_type: frequencyType,
-        transaction_amount: input.amountPesos,
-        currency_id: "ARS",
-      },
-      back_url: input.backUrl,
-      status: "pending",
-    }),
+    body: JSON.stringify(payload),
   });
 
-  const data = (await response.json()) as {
-    id?: string;
-    init_point?: string;
-    sandbox_init_point?: string;
-    status?: string;
+  const data = (await response.json()) as PreapprovalRemote & {
     message?: string;
     error?: string;
     cause?: Array<{ code?: string; description?: string }>;
   };
 
+  console.info("[mercadopago] create preapproval response", {
+    ok: response.ok,
+    status: response.status,
+    id: data.id,
+    preapprovalStatus: data.status,
+    liveMode: data.live_mode,
+    hasInitPoint: Boolean(data.init_point),
+    hasSandboxInitPoint: Boolean(data.sandbox_init_point),
+    collectorId: data.collector_id,
+    message: data.message,
+    error: data.error,
+    cause: data.cause,
+  });
+
   if (!response.ok || !data.id) {
     const cause = data.cause?.[0]?.description;
     throw new Error(
-      cause || data.message || data.error || "No se pudo crear la suscripción en Mercado Pago",
+      cause ||
+        data.message ||
+        data.error ||
+        "No se pudo crear la suscripción en Mercado Pago",
     );
   }
 
@@ -79,17 +135,27 @@ export async function createPendingPreapproval(
     throw new Error("Mercado Pago no devolvió un link de pago");
   }
 
+  if (useTestToken && !payerEmail.endsWith("@testuser.com")) {
+    console.warn(
+      "[mercadopago] test mode with non-testuser payer email; MP may reject checkout",
+      { payerEmail },
+    );
+  }
+
   return {
     id: data.id,
     initPoint,
     status: data.status ?? "pending",
+    liveMode: typeof data.live_mode === "boolean" ? data.live_mode : null,
+    sandboxInitPoint: data.sandbox_init_point ?? null,
+    productionInitPoint: data.init_point ?? null,
   };
 }
 
 export async function fetchPreapproval(
   tenantId: string,
   preapprovalId: string,
-): Promise<{ id: string; status: string; external_reference?: string } | null> {
+): Promise<PreapprovalRemote | null> {
   const accessToken = await getValidAccessTokenForTenant(tenantId);
   if (!accessToken) {
     return null;
@@ -103,16 +169,20 @@ export async function fetchPreapproval(
   );
 
   if (!response.ok) {
+    console.warn("[mercadopago] fetch preapproval failed", {
+      preapprovalId,
+      status: response.status,
+    });
     return null;
   }
 
-  return (await response.json()) as {
-    id: string;
-    status: string;
-    external_reference?: string;
-  };
+  return (await response.json()) as PreapprovalRemote;
 }
 
 export function buildSubscriptionBackUrl(tenantSlug: string): string {
   return `${getAppUrl()}/app/${tenantSlug}?payment=return`;
+}
+
+export function isMpTestPayerEmail(email: string): boolean {
+  return email.trim().toLowerCase().endsWith("@testuser.com");
 }

@@ -13,6 +13,7 @@ import type { FieldChoiceInput } from "@/lib/plans/schemas";
 import {
   buildSubscriptionBackUrl,
   createPendingPreapproval,
+  isMpTestPayerEmail,
 } from "@/lib/mercadopago/subscriptions";
 import {
   getTenantMpConnection,
@@ -243,6 +244,18 @@ export async function upsertSubscriberSubscription(
     return { ok: true, subscriptionId };
   }
 
+  const payerEmail = resolveMpPayerEmail(parsedCheckout);
+  const useTestToken = process.env.MP_USE_TEST_TOKEN === "true";
+  if (
+    (useTestToken || (mpConnection && !mpConnection.liveMode)) &&
+    !isMpTestPayerEmail(payerEmail)
+  ) {
+    return {
+      error:
+        "En modo test, el email de Mercado Pago tiene que ser de un usuario de prueba (@testuser.com).",
+    };
+  }
+
   const billingInterval =
     billingIntervalFromPaymentMethod(parsedCheckout.paymentMethod) ?? "month";
   const amountPesos =
@@ -254,7 +267,7 @@ export async function upsertSubscriberSubscription(
     const preapproval = await createPendingPreapproval({
       tenantId,
       reason: `${plan.name} (${billingInterval === "year" ? "anual" : "mensual"})`,
-      payerEmail: resolveMpPayerEmail(parsedCheckout),
+      payerEmail,
       externalReference: subscriptionId,
       amountPesos,
       billingInterval,

@@ -15,7 +15,9 @@ import { fieldChoiceSchema, type FieldChoiceInput } from "@/lib/plans/schemas";
 import {
   buildSubscriptionBackUrl,
   createPendingPreapproval,
+  isMpTestPayerEmail,
 } from "@/lib/mercadopago/subscriptions";
+import { getTenantMpConnection } from "@/lib/mercadopago/oauth";
 import {
   checkoutDetailsSchema,
   type CheckoutDetailsInput,
@@ -216,6 +218,18 @@ export async function resumeSubscriptionPaymentAction(
     return {
       error:
         "Ingresá el email de tu cuenta de Mercado Pago (puede ser distinto al de Ori)",
+    };
+  }
+
+  const connection = await getTenantMpConnection(tenant.id);
+  const useTestToken = process.env.MP_USE_TEST_TOKEN === "true";
+  if (
+    (useTestToken || (connection && !connection.liveMode)) &&
+    !isMpTestPayerEmail(payerEmail)
+  ) {
+    return {
+      error:
+        "En modo test, el email de Mercado Pago tiene que ser de un usuario de prueba (@testuser.com).",
     };
   }
 
