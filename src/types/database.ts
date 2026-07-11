@@ -20,6 +20,7 @@ export type InvitationStatus = "pending" | "accepted" | "expired" | "revoked";
 
 export type SubscriptionStatus =
   | "pending_payment"
+  | "pending_authorization"
   | "trialing"
   | "active"
   | "past_due"

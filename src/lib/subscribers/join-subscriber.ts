@@ -177,13 +177,17 @@ export async function upsertSubscriberSubscription(
   }
 
   let subscriptionId = existingSub?.id ?? null;
+  const initialStatus =
+    parsedCheckout.paymentMethod === "transfer"
+      ? "pending_payment"
+      : "pending_authorization";
 
   if (existingSub) {
     const { error: updateError } = await db
       .from("subscriptions")
       .update({
         final_price_cents: finalPriceCents,
-        status: "pending_payment",
+        status: initialStatus,
         payment_status: "pending",
         ...checkoutColumns(parsedCheckout),
       })
@@ -207,7 +211,7 @@ export async function upsertSubscriberSubscription(
         tenant_id: tenantId,
         user_id: userId,
         plan_id: planId,
-        status: "pending_payment",
+        status: initialStatus,
         payment_status: "pending",
         final_price_cents: finalPriceCents,
         ...checkoutColumns(parsedCheckout),

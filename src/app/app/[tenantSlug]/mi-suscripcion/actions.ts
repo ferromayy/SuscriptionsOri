@@ -6,10 +6,16 @@ import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { getTenantRole } from "@/lib/auth/permissions";
+import { createDbClient } from "@/lib/db/client";
+import { centsToPesos } from "@/lib/plans/money";
 import { getActivePlansForTenant } from "@/lib/plans/get-plans";
 import { loadResolvedPlan } from "@/lib/plans/load-resolved-plan";
 import { validateFieldChoices } from "@/lib/plans/pricing-utils";
 import { fieldChoiceSchema, type FieldChoiceInput } from "@/lib/plans/schemas";
+import {
+  buildSubscriptionBackUrl,
+  createPendingPreapproval,
+} from "@/lib/mercadopago/subscriptions";
 import {
   checkoutDetailsSchema,
   type CheckoutDetailsInput,
@@ -18,6 +24,10 @@ import { upsertSubscriberSubscription } from "@/lib/subscribers/join-subscriber"
 import { getTenantBySlug } from "@/lib/tenants/get-tenant-by-slug";
 
 export type SubscriptionActionState = {
+  error: string | null;
+};
+
+export type ResumePaymentState = {
   error: string | null;
 };
 
@@ -145,4 +155,125 @@ export async function subscribeLoggedInSubscriber(
 
   revalidatePath(`/app/${tenantSlug}`);
   redirect(result.redirectUrl ?? `/app/${tenantSlug}`);
+}
+
+export async function resumeSubscriptionPaymentAction(
+  tenantSlug: string,
+  subscriptionId: string,
+): Promise<ResumePaymentState> {
+  const user = await getCurrentUser();
+  if (!user) {
+    return { error: "Tenés que iniciar sesión" };
+  }
+
+  const tenant = await getTenantBySlug(tenantSlug);
+  if (!tenant || tenant.status !== "active") {
+    return { error: "Organización no disponible" };
+  }
+
+  const role = await getTenantRole(user.id, tenant.id);
+  if (role !== "subscriber") {
+    return { error: "Solo los suscriptos pueden completar el pago" };
+  }
+
+  const db = createDbClient();
+  const { data: subscription, error: fetchError } = await db
+    .from("subscriptions")
+    .select(
+      "id, status, payment_method, billing_interval, final_price_cents, contact_email, mp_init_point, mp_preapproval_id, plan_id",
+    )
+    .eq("id", subscriptionId)
+    .eq("tenant_id", tenant.id)
+    .eq("user_id", user.id)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (fetchError || !subscription) {
+    return { error: "No se encontró la suscripción" };
+  }
+
+  if (subscription.status !== "pending_authorization") {
+    return { error: "Esta suscripción no tiene un pago con tarjeta pendiente" };
+  }
+
+  if (subscription.payment_method === "transfer") {
+    return {
+      error:
+        "Esta suscripción es por transferencia. El comercio tiene que confirmar el pago cuando lo reciba.",
+    };
+  }
+
+  if (
+    subscription.payment_method !== "card_monthly" &&
+    subscription.payment_method !== "card_annual"
+  ) {
+    return { error: "No hay un medio de pago con tarjeta para retomar" };
+  }
+
+  if (subscription.mp_init_point) {
+    redirect(subscription.mp_init_point);
+  }
+
+  const payerEmail = subscription.contact_email || user.email;
+  if (!payerEmail) {
+    return { error: "Falta el email de contacto para retomar el pago" };
+  }
+
+  const { data: plan } = await db
+    .from("plans")
+    .select("name")
+    .eq("id", subscription.plan_id)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  const billingInterval =
+    subscription.billing_interval === "year" ? "year" : "month";
+  const amountPesos =
+    billingInterval === "year"
+      ? centsToPesos(subscription.final_price_cents ?? 0) * 12
+      : centsToPesos(subscription.final_price_cents ?? 0);
+
+  try {
+    const preapproval = await createPendingPreapproval({
+      tenantId: tenant.id,
+      reason: `${plan?.name ?? "Suscripción"} (${billingInterval === "year" ? "anual" : "mensual"})`,
+      payerEmail,
+      externalReference: subscription.id,
+      amountPesos,
+      billingInterval,
+      backUrl: buildSubscriptionBackUrl(tenant.slug),
+    });
+
+    const { error: updateError } = await db
+      .from("subscriptions")
+      .update({
+        mp_preapproval_id: preapproval.id,
+        mp_init_point: preapproval.initPoint,
+        payment_status: "pending",
+      })
+      .eq("id", subscription.id);
+
+    if (updateError) {
+      return { error: updateError.message };
+    }
+
+    redirect(preapproval.initPoint);
+  } catch (error) {
+    if (
+      error &&
+      typeof error === "object" &&
+      "digest" in error &&
+      typeof (error as { digest?: unknown }).digest === "string" &&
+      (error as { digest: string }).digest.startsWith("NEXT_REDIRECT")
+    ) {
+      throw error;
+    }
+
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : "No se pudo retomar el pago con Mercado Pago",
+    };
+  }
 }

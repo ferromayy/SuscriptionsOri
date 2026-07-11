@@ -197,7 +197,7 @@ create table public.subscriptions (
   user_id uuid not null references public.users (id) on delete cascade,
   plan_id uuid not null references public.plans (id) on delete restrict,
   status text not null default 'pending_payment'
-    check (status in ('pending_payment', 'trialing', 'active', 'past_due', 'cancelled')),
+    check (status in ('pending_payment', 'pending_authorization', 'trialing', 'active', 'past_due', 'cancelled')),
   final_price_cents integer check (final_price_cents is null or final_price_cents >= 0),
   contact_email text,
   contact_phone text,

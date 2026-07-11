@@ -1,9 +1,29 @@
 import Link from "next/link";
 
+import { ResumePaymentButton } from "@/components/subscriptions/resume-payment-button";
 import { createDbClient } from "@/lib/db/client";
 import { formatCents } from "@/lib/plans/money";
 import { requireTenantAccess } from "@/lib/tenants/require-tenant-access";
 import { isTenantManager } from "@/lib/auth/permissions";
+
+function statusLabel(status: string) {
+  switch (status) {
+    case "pending_payment":
+      return "Esperando confirmación de transferencia";
+    case "pending_authorization":
+      return "Falta autorizar en Mercado Pago";
+    case "active":
+      return "Activa";
+    case "cancelled":
+      return "Cancelada";
+    case "past_due":
+      return "Vencida";
+    case "trialing":
+      return "Prueba";
+    default:
+      return status;
+  }
+}
 
 export default async function TenantDashboardPage({
   params,
@@ -29,7 +49,9 @@ export default async function TenantDashboardPage({
 
   const { data: subscriptions } = await db
     .from("subscriptions")
-    .select("id, status, plan_id, final_price_cents, created_at")
+    .select(
+      "id, status, plan_id, final_price_cents, created_at, payment_method, mp_init_point",
+    )
     .eq("tenant_id", tenant.id)
     .eq("user_id", user.id)
     .is("deleted_at", null)
@@ -84,33 +106,65 @@ export default async function TenantDashboardPage({
           ) : (
             (subscriptions ?? []).map((subscription) => {
               const plan = plansById.get(subscription.plan_id);
+              const needsCardPayment =
+                subscription.status === "pending_authorization" &&
+                (subscription.payment_method === "card_monthly" ||
+                  subscription.payment_method === "card_annual");
+              const isTransferPending =
+                subscription.status === "pending_payment" &&
+                subscription.payment_method === "transfer";
+
               return (
-                <Link
-                  key={subscription.id}
-                  href={`/app/${tenant.slug}/mi-suscripcion/${subscription.id}`}
-                  className="ori-card block transition hover:border-gray-400"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-sm text-gray-600">Suscripción</p>
-                      <p className="mt-2 text-xl font-semibold text-gray-900">
-                        {plan?.name ?? "Plan activo"}
-                      </p>
-                      <p className="mt-1 text-sm capitalize text-gray-500">
-                        Estado: {subscription.status}
-                      </p>
-                      {subscription.final_price_cents !== null && plan && (
-                        <p className="mt-1 text-sm text-gray-700">
-                          {formatCents(
-                            subscription.final_price_cents,
-                            plan.currency,
-                          )}
+                <div key={subscription.id} className="ori-card space-y-4">
+                  <Link
+                    href={`/app/${tenant.slug}/mi-suscripcion/${subscription.id}`}
+                    className="block"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-sm text-gray-600">Suscripción</p>
+                        <p className="mt-2 text-xl font-semibold text-gray-900">
+                          {plan?.name ?? "Plan"}
                         </p>
-                      )}
+                        <p className="mt-1 text-sm text-gray-500">
+                          Estado: {statusLabel(subscription.status)}
+                        </p>
+                        {subscription.final_price_cents !== null && plan && (
+                          <p className="mt-1 text-sm text-gray-700">
+                            {formatCents(
+                              subscription.final_price_cents,
+                              plan.currency,
+                            )}
+                          </p>
+                        )}
+                      </div>
+                      <span className="text-sm text-gray-500">
+                        Actualizar opciones →
+                      </span>
                     </div>
-                    <span className="text-sm text-gray-500">Actualizar →</span>
-                  </div>
-                </Link>
+                  </Link>
+
+                  {needsCardPayment && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+                      <p className="text-sm text-amber-900">
+                        Todavía falta autorizar el cobro en Mercado Pago.
+                      </p>
+                      <div className="mt-3">
+                        <ResumePaymentButton
+                          tenantSlug={tenant.slug}
+                          subscriptionId={subscription.id}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {isTransferPending && (
+                    <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                      Transferencia pendiente: el comercio la confirma cuando
+                      vea el dinero en su cuenta.
+                    </p>
+                  )}
+                </div>
               );
             })
           )}
@@ -128,7 +182,9 @@ export default async function TenantDashboardPage({
           <div className="mt-8 grid gap-4 sm:grid-cols-2">
             <div className="ori-card">
               <p className="text-sm text-gray-600">Estado del tenant</p>
-              <p className="mt-2 text-xl font-semibold capitalize">{tenant.status}</p>
+              <p className="mt-2 text-xl font-semibold capitalize">
+                {tenant.status}
+              </p>
             </div>
             <div className="ori-card">
               <p className="text-sm text-gray-600">Suscriptos</p>

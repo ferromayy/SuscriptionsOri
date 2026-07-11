@@ -69,7 +69,7 @@ async function syncPreapprovalById(preapprovalId: string): Promise<void> {
       ? "active"
       : remote.status === "cancelled"
         ? "cancelled"
-        : "pending_payment";
+        : "pending_authorization";
 
   await db
     .from("subscriptions")
