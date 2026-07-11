@@ -160,6 +160,7 @@ export async function subscribeLoggedInSubscriber(
 export async function resumeSubscriptionPaymentAction(
   tenantSlug: string,
   subscriptionId: string,
+  mpPayerEmail?: string,
 ): Promise<ResumePaymentState> {
   const user = await getCurrentUser();
   if (!user) {
@@ -210,13 +211,12 @@ export async function resumeSubscriptionPaymentAction(
     return { error: "No hay un medio de pago con tarjeta para retomar" };
   }
 
-  // Always create a fresh preapproval: old init_point links often break
-  // after a failed/abandoned checkout (MP SUB03 errors).
-  const payerEmail = (subscription.contact_email || user.email || "")
-    .trim()
-    .toLowerCase();
-  if (!payerEmail) {
-    return { error: "Falta el email de contacto para retomar el pago" };
+  const payerEmail = (mpPayerEmail || "").trim().toLowerCase();
+  if (!payerEmail || !payerEmail.includes("@")) {
+    return {
+      error:
+        "Ingresá el email de tu cuenta de Mercado Pago (puede ser distinto al de Ori)",
+    };
   }
 
   const { data: plan } = await db

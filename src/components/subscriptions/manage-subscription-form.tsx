@@ -167,6 +167,7 @@ export function ManageSubscriptionForm({
   );
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | "">("");
   const [paymentReference, setPaymentReference] = useState("");
+  const [mpPayerEmail, setMpPayerEmail] = useState("");
   const [state, formAction, pending] = useActionState(
     subscribeLoggedInSubscriber,
     initialState,
@@ -194,8 +195,8 @@ export function ManageSubscriptionForm({
   });
   const deliveryComplete = isDeliveryComplete(deliveryMethod, deliveryDetails);
   const paymentComplete =
-    paymentMethod === "card_monthly" ||
-    paymentMethod === "card_annual" ||
+    ((paymentMethod === "card_monthly" || paymentMethod === "card_annual") &&
+      mpPayerEmail.trim().includes("@")) ||
     (paymentMethod === "transfer" && paymentReference.trim().length > 0);
 
   const checkoutPayload: CheckoutDetailsInput | null =
@@ -212,6 +213,10 @@ export function ManageSubscriptionForm({
           deliveryDetails,
           paymentMethod,
           paymentReference: paymentReference.trim() || undefined,
+          mpPayerEmail:
+            paymentMethod === "card_monthly" || paymentMethod === "card_annual"
+              ? mpPayerEmail.trim()
+              : undefined,
         }
       : null;
 
@@ -659,10 +664,19 @@ export function ManageSubscriptionForm({
 
           {(paymentMethod === "card_monthly" ||
             paymentMethod === "card_annual") && (
-            <p className="text-xs text-gray-500">
-              Al confirmar te vamos a llevar a Mercado Pago para cargar tu
-              tarjeta y autorizar el cobro recurrente.
-            </p>
+            <div className="space-y-3 rounded-lg border border-gray-200 p-4">
+              <Input
+                label="Email de tu cuenta de Mercado Pago"
+                value={mpPayerEmail}
+                onChange={setMpPayerEmail}
+                type="email"
+              />
+              <p className="text-xs text-gray-500">
+                Puede ser distinto al email de Ori. Mercado Pago usa este email
+                para el cobro. Al confirmar te vamos a llevar a autorizar la
+                tarjeta.
+              </p>
+            </div>
           )}
 
           <form action={formAction} className="space-y-3">

@@ -139,6 +139,7 @@ export function JoinForm({
   );
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | "">("");
   const [paymentReference, setPaymentReference] = useState("");
+  const [mpPayerEmail, setMpPayerEmail] = useState("");
   const [signUpState, signUpAction, signUpPending] = useActionState(
     signUpAsSubscriber,
     initialState,
@@ -166,8 +167,8 @@ export function JoinForm({
   const contactComplete = isContactComplete(contact);
   const deliveryComplete = isDeliveryComplete(deliveryMethod, deliveryDetails);
   const paymentComplete =
-    paymentMethod === "card_monthly" ||
-    paymentMethod === "card_annual" ||
+    ((paymentMethod === "card_monthly" || paymentMethod === "card_annual") &&
+      mpPayerEmail.trim().includes("@")) ||
     (paymentMethod === "transfer" && paymentReference.trim().length > 0);
 
   const checkoutPayload: CheckoutDetailsInput | null =
@@ -183,6 +184,10 @@ export function JoinForm({
           deliveryDetails,
           paymentMethod,
           paymentReference: paymentReference.trim() || undefined,
+          mpPayerEmail:
+            paymentMethod === "card_monthly" || paymentMethod === "card_annual"
+              ? mpPayerEmail.trim()
+              : undefined,
         }
       : null;
 
@@ -610,10 +615,38 @@ export function JoinForm({
 
           {(paymentMethod === "card_monthly" ||
             paymentMethod === "card_annual") && (
-            <p className="text-xs text-gray-500">
-              Al finalizar el registro te vamos a llevar a Mercado Pago para
-              cargar tu tarjeta y autorizar el cobro recurrente.
-            </p>
+            <div className="space-y-3 rounded-lg border border-gray-200 p-4">
+              <div>
+                <label
+                  htmlFor="mpPayerEmail"
+                  className="block text-sm text-gray-700"
+                >
+                  Email de tu cuenta de Mercado Pago
+                </label>
+                <input
+                  id="mpPayerEmail"
+                  type="email"
+                  value={mpPayerEmail}
+                  onChange={(event) => setMpPayerEmail(event.target.value)}
+                  onFocus={() => {
+                    if (!mpPayerEmail.trim() && email.trim()) {
+                      setMpPayerEmail(email.trim());
+                    }
+                  }}
+                  className="ori-input mt-1"
+                  placeholder="el email con el que entrás a Mercado Pago"
+                  required
+                />
+                <p className="mt-2 text-xs text-gray-500">
+                  Puede ser distinto al email con el que te registrás en Ori.
+                  Mercado Pago usa este email para el cobro.
+                </p>
+              </div>
+              <p className="text-xs text-gray-500">
+                Al finalizar el registro te vamos a llevar a Mercado Pago para
+                cargar tu tarjeta y autorizar el cobro recurrente.
+              </p>
+            </div>
           )}
 
           <StepNav

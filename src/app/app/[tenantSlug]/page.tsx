@@ -50,7 +50,7 @@ export default async function TenantDashboardPage({
   const { data: subscriptions } = await db
     .from("subscriptions")
     .select(
-      "id, status, plan_id, final_price_cents, created_at, payment_method, mp_init_point",
+      "id, status, plan_id, final_price_cents, created_at, payment_method, mp_init_point, contact_email",
     )
     .eq("tenant_id", tenant.id)
     .eq("user_id", user.id)
@@ -153,6 +153,9 @@ export default async function TenantDashboardPage({
                         <ResumePaymentButton
                           tenantSlug={tenant.slug}
                           subscriptionId={subscription.id}
+                          defaultEmail={
+                            subscription.contact_email || user.email || ""
+                          }
                         />
                       </div>
                     </div>

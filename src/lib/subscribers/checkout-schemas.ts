@@ -43,6 +43,8 @@ export const checkoutDetailsSchema = z
     deliveryDetails: z.record(z.string(), z.string()).default({}),
     paymentMethod: paymentMethodSchema,
     paymentReference: z.string().trim().optional(),
+    /** Email of the Mercado Pago account used to pay (can differ from Ori email). */
+    mpPayerEmail: z.string().trim().email("Email de Mercado Pago inválido").optional(),
   })
   .superRefine((data, ctx) => {
     if (data.deliveryMethod === "store_pickup") {
@@ -88,9 +90,25 @@ export const checkoutDetailsSchema = z
         path: ["paymentReference"],
       });
     }
+
+    if (
+      (data.paymentMethod === "card_monthly" ||
+        data.paymentMethod === "card_annual") &&
+      (!data.mpPayerEmail || data.mpPayerEmail.trim().length === 0)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Ingresá el email de tu cuenta de Mercado Pago",
+        path: ["mpPayerEmail"],
+      });
+    }
   });
 
 export type CheckoutDetailsInput = z.infer<typeof checkoutDetailsSchema>;
+
+export function resolveMpPayerEmail(checkout: CheckoutDetailsInput): string {
+  return (checkout.mpPayerEmail || checkout.email).trim().toLowerCase();
+}
 
 export function normalizeDeliveryDetails(
   method: DeliveryMethod,

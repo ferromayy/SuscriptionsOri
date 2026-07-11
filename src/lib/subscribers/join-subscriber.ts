@@ -21,6 +21,7 @@ import {
   billingIntervalFromPaymentMethod,
   checkoutDetailsSchema,
   normalizeDeliveryDetails,
+  resolveMpPayerEmail,
   type CheckoutDetailsInput,
 } from "@/lib/subscribers/checkout-schemas";
 import { getTenantBySlug } from "@/lib/tenants/get-tenant-by-slug";
@@ -253,7 +254,7 @@ export async function upsertSubscriberSubscription(
     const preapproval = await createPendingPreapproval({
       tenantId,
       reason: `${plan.name} (${billingInterval === "year" ? "anual" : "mensual"})`,
-      payerEmail: parsedCheckout.email,
+      payerEmail: resolveMpPayerEmail(parsedCheckout),
       externalReference: subscriptionId,
       amountPesos,
       billingInterval,
