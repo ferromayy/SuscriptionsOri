@@ -116,6 +116,15 @@ export default async function TenantPaymentsPage({
             <p className="text-xs text-gray-500">
               Plataforma: MP_USE_TEST_TOKEN={useTestToken ? "true" : "false"}
             </p>
+            {useTestToken && (
+              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                Para suscripciones, Mercado Pago recomienda{" "}
+                <span className="font-medium">MP_USE_TEST_TOKEN=false</span> y
+                conectar Pagos con el <span className="font-medium">vendedor
+                de prueba</span>. Con test_token el botón Confirmar del checkout
+                suele quedar bloqueado.
+              </p>
+            )}
             {modeMismatch && (
               <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
                 Atención: el modo de la conexión y MP_USE_TEST_TOKEN no

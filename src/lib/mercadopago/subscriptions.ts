@@ -40,6 +40,7 @@ export type PreapprovalRemote = {
     frequency_type?: string;
     transaction_amount?: number | string;
     currency_id?: string;
+    end_date?: string;
   };
   summarized?: Record<string, unknown>;
 };
@@ -49,11 +50,16 @@ function buildRecurrence(input: CreatePreapprovalInput) {
   const frequency = input.billingInterval === "year" ? 12 : 1;
   const amount = Math.round(input.amountPesos * 100) / 100;
 
+  // Official pending-subscription examples include end_date.
+  const end = new Date();
+  end.setFullYear(end.getFullYear() + 2);
+
   return {
     frequency,
     frequency_type: "months" as const,
     transaction_amount: amount,
     currency_id: "ARS",
+    end_date: end.toISOString(),
   };
 }
 
@@ -82,6 +88,7 @@ export async function createPendingPreapproval(
     amount: autoRecurring.transaction_amount,
     frequency: autoRecurring.frequency,
     frequencyType: autoRecurring.frequency_type,
+    endDate: autoRecurring.end_date,
     externalReference: input.externalReference,
     backUrl: input.backUrl,
     useTestToken: process.env.MP_USE_TEST_TOKEN === "true",
@@ -92,6 +99,8 @@ export async function createPendingPreapproval(
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
+      // Helps avoid duplicate broken checkouts on retries
+      "X-Idempotency-Key": `${input.externalReference}-${Date.now()}`,
     },
     body: JSON.stringify(payload),
   });
@@ -108,8 +117,8 @@ export async function createPendingPreapproval(
     id: data.id,
     preapprovalStatus: data.status,
     liveMode: data.live_mode,
-    hasInitPoint: Boolean(data.init_point),
-    hasSandboxInitPoint: Boolean(data.sandbox_init_point),
+    initPoint: data.init_point,
+    sandboxInitPoint: data.sandbox_init_point,
     collectorId: data.collector_id,
     message: data.message,
     error: data.error,
@@ -126,16 +135,17 @@ export async function createPendingPreapproval(
     );
   }
 
-  const useTestToken = process.env.MP_USE_TEST_TOKEN === "true";
-  const initPoint = useTestToken
-    ? data.sandbox_init_point || data.init_point
-    : data.init_point || data.sandbox_init_point;
-
+  // Always prefer init_point. sandbox_init_point is deprecated and the
+  // /checkout/v1/subscription/redirect UI often leaves Confirmar disabled.
+  const initPoint = data.init_point || data.sandbox_init_point;
   if (!initPoint) {
     throw new Error("Mercado Pago no devolvió un link de pago");
   }
 
-  if (useTestToken && !payerEmail.endsWith("@testuser.com")) {
+  if (
+    process.env.MP_USE_TEST_TOKEN === "true" &&
+    !payerEmail.endsWith("@testuser.com")
+  ) {
     console.warn(
       "[mercadopago] test mode with non-testuser payer email; MP may reject checkout",
       { payerEmail },
