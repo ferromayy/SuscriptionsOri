@@ -1,7 +1,9 @@
 import Link from "next/link";
 
+import { ConfirmTransferButton } from "@/components/subscribers/confirm-transfer-button";
 import { CopyLinkButton } from "@/components/tenant/copy-link-button";
 import { createDbClient } from "@/lib/db/client";
+import { formatCents } from "@/lib/plans/money";
 import { formatPlanPrice } from "@/lib/plans/format-price";
 import { getActivePlansForTenant } from "@/lib/plans/get-plans";
 import { getTenantJoinUrl } from "@/lib/tenants/join-url";
@@ -22,11 +24,56 @@ export default async function TenantSubscribersPage({
   const joinUrl = getTenantJoinUrl(tenant.slug);
   const joinPath = `/app/${tenant.slug}/join?preview=1`;
 
-  const { count: subscriberCount } = await db.from("tenant_members").select("*", { count: "exact", head: true })
+  const { count: subscriberCount } = await db
+    .from("tenant_members")
+    .select("*", { count: "exact", head: true })
     .eq("tenant_id", tenant.id)
-    .eq("role", "subscriber");
+    .eq("role", "subscriber")
+    .is("deleted_at", null);
 
   const plans = await getActivePlansForTenant(tenant.id);
+
+  const { data: pendingTransfers } = await db
+    .from("subscriptions")
+    .select(
+      "id, final_price_cents, payment_reference, contact_email, contact_first_name, contact_last_name, created_at, plan_id, user_id",
+    )
+    .eq("tenant_id", tenant.id)
+    .eq("payment_method", "transfer")
+    .eq("status", "pending_payment")
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false });
+
+  const pendingPlanIds = [
+    ...new Set((pendingTransfers ?? []).map((sub) => sub.plan_id)),
+  ];
+  const pendingUserIds = [
+    ...new Set((pendingTransfers ?? []).map((sub) => sub.user_id)),
+  ];
+
+  const plansById = new Map<string, { name: string; currency: string }>();
+  if (pendingPlanIds.length > 0) {
+    const { data: pendingPlans } = await db
+      .from("plans")
+      .select("id, name, currency")
+      .in("id", pendingPlanIds)
+      .is("deleted_at", null);
+    for (const plan of pendingPlans ?? []) {
+      plansById.set(plan.id, { name: plan.name, currency: plan.currency });
+    }
+  }
+
+  const usersById = new Map<string, { email: string; fullName: string | null }>();
+  if (pendingUserIds.length > 0) {
+    const { data: users } = await db
+      .from("users")
+      .select("id, email, full_name")
+      .in("id", pendingUserIds)
+      .is("deleted_at", null);
+    for (const user of users ?? []) {
+      usersById.set(user.id, { email: user.email, fullName: user.full_name });
+    }
+  }
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-16">
@@ -85,6 +132,71 @@ export default async function TenantSubscribersPage({
           <p className="text-sm text-gray-600">Planes disponibles</p>
           <p className="mt-2 text-3xl font-semibold">{plans.length}</p>
         </div>
+      </section>
+
+      <section className="mt-8 ori-card space-y-4">
+        <div>
+          <h2 className="text-lg font-medium text-gray-900">
+            Transferencias pendientes
+          </h2>
+          <p className="mt-2 text-sm text-gray-600">
+            Cuando veas el dinero en tu cuenta, confirmá el pago para activar la
+            suscripción.
+          </p>
+        </div>
+
+        {(pendingTransfers ?? []).length === 0 ? (
+          <p className="text-sm text-gray-600">
+            No hay transferencias pendientes de confirmación.
+          </p>
+        ) : (
+          <ul className="space-y-4">
+            {(pendingTransfers ?? []).map((subscription) => {
+              const plan = plansById.get(subscription.plan_id);
+              const user = usersById.get(subscription.user_id);
+              const displayName =
+                [subscription.contact_first_name, subscription.contact_last_name]
+                  .filter(Boolean)
+                  .join(" ") ||
+                user?.fullName ||
+                "Sin nombre";
+              const email =
+                subscription.contact_email || user?.email || "Sin email";
+
+              return (
+                <li
+                  key={subscription.id}
+                  className="flex flex-col gap-4 rounded-lg border border-gray-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="space-y-1 text-sm">
+                    <p className="font-medium text-gray-900">{displayName}</p>
+                    <p className="text-gray-600">{email}</p>
+                    <p className="text-gray-600">
+                      {plan?.name ?? "Suscripción"} ·{" "}
+                      {formatCents(
+                        subscription.final_price_cents ?? 0,
+                        plan?.currency ?? "ars",
+                        "month",
+                      )}
+                    </p>
+                    {subscription.payment_reference && (
+                      <p className="text-gray-600">
+                        Referencia: {subscription.payment_reference}
+                      </p>
+                    )}
+                    <p className="text-xs text-gray-500">
+                      {new Date(subscription.created_at).toLocaleString("es-AR")}
+                    </p>
+                  </div>
+                  <ConfirmTransferButton
+                    tenantSlug={tenant.slug}
+                    subscriptionId={subscription.id}
+                  />
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </section>
 
       {plans.length > 0 && (
