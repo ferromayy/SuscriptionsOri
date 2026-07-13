@@ -584,7 +584,7 @@ export function ManageSubscriptionForm({
         </section>
       )}
 
-      {step === "payment" && checkoutPayload && paymentOptions && (
+      {step === "payment" && paymentOptions && (
         <section className="space-y-4">
           <h2 className="text-lg font-medium text-gray-900">Pago</h2>
           {selectedPlan && (
