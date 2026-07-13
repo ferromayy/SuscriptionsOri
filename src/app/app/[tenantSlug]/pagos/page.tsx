@@ -47,9 +47,6 @@ export default async function TenantPaymentsPage({
     diagnostics.push({ sub, remote });
   }
 
-  const modeMismatch =
-    Boolean(connection) && connection!.liveMode === useTestToken;
-
   return (
     <div className="mx-auto max-w-3xl px-6 py-16">
       <p className="ori-eyebrow">{tenant.name}</p>
@@ -125,10 +122,10 @@ export default async function TenantPaymentsPage({
                 suele quedar bloqueado.
               </p>
             )}
-            {modeMismatch && (
-              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                Atención: el modo de la conexión y MP_USE_TEST_TOKEN no
-                coinciden. Desconectá y volvé a conectar Pagos.
+            {!useTestToken && connection && !connection.liveMode && (
+              <p className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-900">
+                Configuración correcta para pruebas de suscripciones: vendedor de
+                prueba con token de producción de esa cuenta.
               </p>
             )}
             <DisconnectMercadoPagoButton tenantSlug={tenant.slug} />
