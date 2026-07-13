@@ -31,7 +31,7 @@ export default async function TenantPaymentsPage({
   const { data: recentCardSubs } = await db
     .from("subscriptions")
     .select(
-      "id, status, payment_status, payment_method, contact_email, mp_preapproval_id, mp_init_point, final_price_cents, billing_interval, created_at",
+      "id, status, payment_status, payment_method, contact_email, mp_preapproval_id, mp_init_point, mp_last_rejection_detail, mp_last_rejection_at, final_price_cents, billing_interval, created_at",
     )
     .eq("tenant_id", tenant.id)
     .in("payment_method", ["card_monthly", "card_annual"])
@@ -189,6 +189,13 @@ export default async function TenantPaymentsPage({
                   <p>method: {sub.payment_method}</p>
                   <p>contact_email: {sub.contact_email ?? "null"}</p>
                   <p>mp_preapproval_id: {sub.mp_preapproval_id ?? "null"}</p>
+                  <p>
+                    mp_last_rejection_detail:{" "}
+                    {sub.mp_last_rejection_detail ?? "null"}
+                  </p>
+                  <p>
+                    mp_last_rejection_at: {sub.mp_last_rejection_at ?? "null"}
+                  </p>
                   <p className="break-all">
                     mp_init_point: {sub.mp_init_point ?? "null"}
                   </p>

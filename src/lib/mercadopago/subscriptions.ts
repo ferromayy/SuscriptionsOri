@@ -45,6 +45,28 @@ export type PreapprovalRemote = {
   summarized?: Record<string, unknown>;
 };
 
+export type AuthorizedPaymentRemote = {
+  id: number;
+  preapproval_id?: string;
+  external_reference?: string | number;
+  status?: string;
+  date_created?: string;
+  last_modified?: string;
+  payment?: {
+    id?: number;
+    status?: string;
+    status_detail?: string;
+  };
+};
+
+export type PreapprovalRejectionDetail = {
+  statusDetail: string;
+  paymentStatus: string | null;
+  paymentId: number | null;
+  invoiceId: number | null;
+  externalReference: string | null;
+};
+
 function buildRecurrence(input: CreatePreapprovalInput) {
   // MP preapproval only documents frequency_type: days | months (not years).
   const frequency = input.billingInterval === "year" ? 12 : 1;
@@ -187,6 +209,76 @@ export async function fetchPreapproval(
   }
 
   return (await response.json()) as PreapprovalRemote;
+}
+
+export async function searchAuthorizedPayments(
+  tenantId: string,
+  preapprovalId: string,
+): Promise<AuthorizedPaymentRemote[]> {
+  const accessToken = await getValidAccessTokenForTenant(tenantId);
+  if (!accessToken) {
+    return [];
+  }
+
+  const url = new URL(`${getMpApiBaseUrl()}/authorized_payments/search`);
+  url.searchParams.set("preapproval_id", preapprovalId);
+  url.searchParams.set("limit", "20");
+
+  const response = await fetch(url.toString(), {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!response.ok) {
+    console.warn("[mercadopago] search authorized payments failed", {
+      preapprovalId,
+      status: response.status,
+    });
+    return [];
+  }
+
+  const data = (await response.json()) as {
+    results?: AuthorizedPaymentRemote[];
+  };
+  return data.results ?? [];
+}
+
+/**
+ * Finds the most recent rejected invoice payment for a preapproval.
+ * MP cancels subscriptions after rejected charges but the preapproval
+ * object itself does not include payment.status_detail.
+ */
+export async function findLatestRejectionDetail(
+  tenantId: string,
+  preapprovalId: string,
+): Promise<PreapprovalRejectionDetail | null> {
+  const invoices = await searchAuthorizedPayments(tenantId, preapprovalId);
+  const rejected = invoices
+    .filter((invoice) => {
+      const status = invoice.payment?.status;
+      return status === "rejected" || status === "cancelled";
+    })
+    .sort((a, b) => {
+      const aTime = Date.parse(a.last_modified || a.date_created || "") || 0;
+      const bTime = Date.parse(b.last_modified || b.date_created || "") || 0;
+      return bTime - aTime;
+    });
+
+  const latest = rejected[0];
+  const statusDetail = latest?.payment?.status_detail?.trim();
+  if (!latest || !statusDetail) {
+    return null;
+  }
+
+  return {
+    statusDetail,
+    paymentStatus: latest.payment?.status ?? null,
+    paymentId: latest.payment?.id ?? null,
+    invoiceId: latest.id ?? null,
+    externalReference:
+      latest.external_reference != null
+        ? String(latest.external_reference)
+        : null,
+  };
 }
 
 export function buildSubscriptionBackUrl(tenantSlug: string): string {

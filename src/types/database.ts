@@ -403,6 +403,8 @@ export interface Database {
           mp_preapproval_id: string | null;
           mp_init_point: string | null;
           payment_status: PaymentStatus | null;
+          mp_last_rejection_detail: string | null;
+          mp_last_rejection_at: string | null;
           created_at: string;
           updated_at: string;
           deleted_at: string | null;
@@ -426,6 +428,8 @@ export interface Database {
           mp_preapproval_id?: string | null;
           mp_init_point?: string | null;
           payment_status?: PaymentStatus | null;
+          mp_last_rejection_detail?: string | null;
+          mp_last_rejection_at?: string | null;
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
@@ -449,6 +453,8 @@ export interface Database {
           mp_preapproval_id?: string | null;
           mp_init_point?: string | null;
           payment_status?: PaymentStatus | null;
+          mp_last_rejection_detail?: string | null;
+          mp_last_rejection_at?: string | null;
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;

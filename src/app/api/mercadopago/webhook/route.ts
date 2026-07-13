@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { createDbClient } from "@/lib/db/client";
-import { fetchPreapproval } from "@/lib/mercadopago/subscriptions";
+import {
+  fetchPreapproval,
+  findLatestRejectionDetail,
+} from "@/lib/mercadopago/subscriptions";
+import type { PaymentStatus, SubscriptionStatus } from "@/types/database";
 
 type WebhookBody = {
   type?: string;
@@ -26,10 +30,12 @@ export async function POST(request: NextRequest) {
   }
 
   // Subscription / preapproval notifications
+  // Note: subscription_authorized_payment uses an invoice id, not preapproval id.
   if (
-    topic.includes("subscription") ||
-    topic.includes("preapproval") ||
-    body.action?.includes("subscription")
+    !topic.includes("authorized_payment") &&
+    (topic.includes("subscription") ||
+      topic.includes("preapproval") ||
+      body.action?.includes("subscription"))
   ) {
     await syncPreapprovalById(resourceId);
   }
@@ -55,7 +61,7 @@ async function syncPreapprovalById(preapprovalId: string): Promise<void> {
     return;
   }
 
-  const paymentStatus =
+  const paymentStatus: PaymentStatus =
     remote.status === "authorized"
       ? "authorized"
       : remote.status === "paused"
@@ -64,20 +70,55 @@ async function syncPreapprovalById(preapprovalId: string): Promise<void> {
           ? "cancelled"
           : "pending";
 
-  const status =
+  const status: SubscriptionStatus =
     remote.status === "authorized"
       ? "active"
       : remote.status === "cancelled"
         ? "cancelled"
         : "pending_authorization";
 
-  await db
-    .from("subscriptions")
-    .update({
-      payment_status: paymentStatus,
-      status,
-    })
-    .eq("id", subscription.id);
+  const update: {
+    payment_status: PaymentStatus;
+    status: SubscriptionStatus;
+    mp_last_rejection_detail?: string;
+    mp_last_rejection_at?: string;
+  } = {
+    payment_status: paymentStatus,
+    status,
+  };
+
+  if (remote.status === "cancelled") {
+    const rejection = await findLatestRejectionDetail(
+      subscription.tenant_id,
+      preapprovalId,
+    );
+
+    if (rejection) {
+      console.warn("[mercadopago] preapproval cancelled after rejected payment", {
+        preapprovalId,
+        externalReference:
+          rejection.externalReference ?? remote.external_reference ?? null,
+        statusDetail: rejection.statusDetail,
+        paymentStatus: rejection.paymentStatus,
+        paymentId: rejection.paymentId,
+        invoiceId: rejection.invoiceId,
+        subscriptionId: subscription.id,
+      });
+      update.mp_last_rejection_detail = rejection.statusDetail;
+      update.mp_last_rejection_at = new Date().toISOString();
+    } else {
+      console.warn(
+        "[mercadopago] preapproval cancelled without rejection detail",
+        {
+          preapprovalId,
+          externalReference: remote.external_reference ?? null,
+          subscriptionId: subscription.id,
+        },
+      );
+    }
+  }
+
+  await db.from("subscriptions").update(update).eq("id", subscription.id);
 }
 
 export async function GET() {

@@ -227,6 +227,8 @@ create table public.subscriptions (
       payment_status is null
       or payment_status in ('pending', 'authorized', 'paused', 'cancelled')
     ),
+  mp_last_rejection_detail text,
+  mp_last_rejection_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   deleted_at timestamptz
