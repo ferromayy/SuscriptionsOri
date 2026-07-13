@@ -118,7 +118,34 @@ async function syncPreapprovalById(preapprovalId: string): Promise<void> {
     }
   }
 
-  await db.from("subscriptions").update(update).eq("id", subscription.id);
+  const { error: updateError } = await db
+    .from("subscriptions")
+    .update(update)
+    .eq("id", subscription.id);
+
+  if (updateError) {
+    console.error("[mercadopago] webhook subscription update failed", {
+      preapprovalId,
+      subscriptionId: subscription.id,
+      error: updateError.message,
+    });
+
+    // If the rejection-detail columns are missing (migration not applied),
+    // still persist the critical status fields.
+    if (update.mp_last_rejection_detail) {
+      const { error: fallbackError } = await db
+        .from("subscriptions")
+        .update({ payment_status: paymentStatus, status })
+        .eq("id", subscription.id);
+      if (fallbackError) {
+        console.error("[mercadopago] webhook fallback update failed", {
+          preapprovalId,
+          subscriptionId: subscription.id,
+          error: fallbackError.message,
+        });
+      }
+    }
+  }
 }
 
 export async function GET() {
