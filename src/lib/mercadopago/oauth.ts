@@ -106,7 +106,44 @@ export async function exchangeAuthorizationCode(
     throw new Error(data.message ?? "No se pudo conectar Mercado Pago");
   }
 
+  data.live_mode = await resolveActualLiveMode(data.access_token, data.live_mode);
+
   return data;
+}
+
+/**
+ * El campo `live_mode` que devuelve /oauth/token refleja el tipo de token
+ * pedido (según el flag `test_token`), NO si la cuenta logueada es una
+ * cuenta de prueba de Mercado Pago. Por eso lo verificamos contra la cuenta
+ * real vía /users/me: las cuentas de test siempre tienen el tag "test_user",
+ * sin importar qué tipo de token se haya solicitado.
+ */
+async function resolveActualLiveMode(
+  accessToken: string,
+  fallback: boolean | undefined,
+): Promise<boolean | undefined> {
+  try {
+    const response = await fetch(`${getMpApiBaseUrl()}/users/me`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!response.ok) {
+      return fallback;
+    }
+
+    const me = (await response.json()) as { tags?: string[] };
+    if (!Array.isArray(me.tags)) {
+      return fallback;
+    }
+
+    if (me.tags.includes("test_user")) {
+      return false;
+    }
+
+    return fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 export async function refreshAccessToken(
@@ -127,6 +164,8 @@ export async function refreshAccessToken(
   if (!response.ok || !data.access_token) {
     throw new Error(data.message ?? "No se pudo renovar el token de Mercado Pago");
   }
+
+  data.live_mode = await resolveActualLiveMode(data.access_token, data.live_mode);
 
   return data;
 }
