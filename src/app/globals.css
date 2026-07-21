@@ -124,4 +124,50 @@ body {
   .ori-product-card-selected {
     @apply border-gray-900 bg-gray-50;
   }
+
+  /* Join page — Orí landing–inspired plan cards */
+  .ori-plan-card {
+    @apply relative flex min-h-[22rem] cursor-pointer flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white p-7 text-left shadow-sm transition-all duration-300 ease-out hover:-translate-y-1.5 hover:shadow-xl sm:p-8;
+  }
+
+  .ori-plan-card-selected {
+    @apply -translate-y-1.5 border-gray-900 shadow-xl ring-1 ring-gray-900;
+  }
+
+  .ori-plan-accent {
+    @apply absolute right-6 top-6 h-6 w-6 rounded-full transition-transform duration-500 ease-out;
+  }
+
+  .ori-plan-card:hover .ori-plan-accent,
+  .ori-plan-card-selected .ori-plan-accent {
+    transform: scale(1.9);
+  }
+
+  /* Soft halo that expands behind the accent dot */
+  .ori-plan-accent::after {
+    content: "";
+    position: absolute;
+    inset: -6px;
+    border-radius: 9999px;
+    background: inherit;
+    opacity: 0;
+    transform: scale(0.6);
+    transition:
+      opacity 0.5s ease-out,
+      transform 0.5s ease-out;
+  }
+
+  .ori-plan-card:hover .ori-plan-accent::after,
+  .ori-plan-card-selected .ori-plan-accent::after {
+    opacity: 0.25;
+    transform: scale(1.35);
+  }
+
+  .ori-section-label {
+    @apply text-[0.7rem] font-medium uppercase tracking-[0.18em] text-gray-400;
+  }
+
+  .ori-join-shell {
+    @apply min-h-full bg-[#f6f6f4] pt-8 text-gray-900;
+  }
 }

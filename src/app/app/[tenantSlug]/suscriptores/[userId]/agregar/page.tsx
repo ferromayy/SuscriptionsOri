@@ -103,7 +103,7 @@ export default async function AddSubscriptionForSubscriberPage({
           actingAsUserId={userId}
           initialContact={initialContact}
           paymentOptions={{
-            cardsEnabled: false,
+            cardsEnabled: Boolean(mpConnection),
             transferEnabled: Boolean(
               mpConnection?.transferAlias || mpConnection?.transferCbu,
             ),

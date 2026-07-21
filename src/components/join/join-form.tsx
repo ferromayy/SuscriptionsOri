@@ -25,6 +25,15 @@ import type {
   BillingCycleDays,
 } from "@/lib/subscribers/checkout-schemas";
 import { isValidArgentinePostalCode } from "@/lib/subscribers/argentine-postal-code";
+import {
+  LOCAL_PHONE_HINT,
+  emailValidationMessage,
+  isValidEmail,
+  isValidLocalArgentinePhone,
+  maskLocalPhoneInput,
+  normalizeLocalArgentinePhone,
+  phoneValidationMessage,
+} from "@/lib/subscribers/contact-validation";
 import { BillingCyclePicker } from "@/components/subscriptions/billing-cycle-picker";
 import { PostalCodeField } from "@/components/subscribers/postal-code-field";
 import { ProvinceLocalityFields } from "@/components/subscribers/province-locality-fields";
@@ -32,6 +41,9 @@ import Link from "next/link";
 
 const initialJoinState: JoinActionState = { error: null };
 const initialManagedState: ManagedSubscriberState = { error: null };
+
+/** Soft accent dots cycling across dynamic tenant plans (landing-inspired). */
+const PLAN_ACCENTS = ["#E07A3D", "#C44B4B", "#C4A574", "#4A7BA7", "#6B8F71"] as const;
 
 type AuthMode = "signup" | "login";
 type CheckoutStep = "plan" | "contact" | "delivery" | "payment" | "account";
@@ -43,6 +55,17 @@ export type JoinPaymentOptions = {
   transferCbu: string | null;
   transferHolderName: string | null;
 };
+
+function planTagline(plan: PublicPlan): string {
+  const fromDescription = plan.description
+    ?.split(/[.\n]/)
+    .map((part) => part.trim())
+    .find(Boolean);
+  if (fromDescription && fromDescription.length <= 42) {
+    return fromDescription;
+  }
+  return "A tu medida";
+}
 
 function buildFieldChoices(
   plan: PublicPlan | undefined,
@@ -93,8 +116,8 @@ function isContactComplete(contact: {
   lastName: string;
 }) {
   return (
-    contact.email.trim().includes("@") &&
-    contact.phone.trim().length >= 6 &&
+    isValidEmail(contact.email) &&
+    isValidLocalArgentinePhone(contact.phone) &&
     contact.firstName.trim().length > 0 &&
     contact.lastName.trim().length > 0
   );
@@ -132,12 +155,15 @@ export function JoinForm({
   plans,
   paymentOptions,
   variant = "public",
+  layout = "default",
 }: {
   tenantSlug: string;
   plans: PublicPlan[];
   paymentOptions: JoinPaymentOptions;
   /** Manager panel: same steps, transfer is confirmed immediately. */
   variant?: "public" | "manager";
+  /** Marketing layout: wider plan grid inspired by Orí landing. */
+  layout?: "default" | "marketing";
 }) {
   const isManager = variant === "manager";
   const [authMode, setAuthMode] = useState<AuthMode>("signup");
@@ -217,7 +243,7 @@ export function JoinForm({
     paymentMethod
       ? {
           email: email.trim(),
-          phone: phone.trim(),
+          phone: normalizeLocalArgentinePhone(phone),
           firstName: firstName.trim(),
           lastName: lastName.trim(),
           deliveryMethod,
@@ -296,99 +322,129 @@ export function JoinForm({
   // Until a plan is picked, only show the first step to keep the screen clean.
   const visibleSteps = selectedPlanId ? allSteps : allSteps.slice(0, 1);
   const currentStepIndex = allSteps.findIndex(([key]) => key === step);
+  const isMarketing = layout === "marketing";
+  const planGridClass =
+    plans.length === 1
+      ? "grid gap-6 sm:max-w-lg"
+      : plans.length === 2
+        ? "grid gap-6 sm:grid-cols-2 lg:max-w-4xl"
+        : plans.length === 3
+          ? "grid gap-6 sm:grid-cols-2 lg:grid-cols-3"
+          : "grid gap-6 sm:grid-cols-2 lg:grid-cols-4";
 
   return (
-    <div className="mt-2">
-      <ol className="mb-8 flex flex-wrap items-center justify-center gap-x-1 gap-y-2 sm:justify-start">
-        {visibleSteps.map(([key, label], index) => {
-          const isCurrent = step === key;
-          const isDone = index < currentStepIndex;
-          return (
-            <li key={key} className="flex items-center">
-              {index > 0 && (
+    <div className={isMarketing && step !== "plan" ? "mx-auto max-w-xl" : undefined}>
+      {(selectedPlanId || !isMarketing) && (
+        <ol className="mb-8 flex flex-wrap items-center justify-center gap-x-1 gap-y-2 sm:justify-start">
+          {visibleSteps.map(([key, label], index) => {
+            const isCurrent = step === key;
+            const isDone = index < currentStepIndex;
+            return (
+              <li key={key} className="flex items-center">
+                {index > 0 && (
+                  <span
+                    className={`mx-1 h-px w-4 sm:w-6 ${
+                      isDone || isCurrent ? "bg-gray-900" : "bg-gray-200"
+                    }`}
+                    aria-hidden
+                  />
+                )}
                 <span
-                  className={`mx-1 h-px w-4 sm:w-6 ${
-                    isDone || isCurrent ? "bg-gray-900" : "bg-gray-200"
-                  }`}
-                  aria-hidden
-                />
-              )}
-              <span
-                className={`flex items-center gap-2 rounded-full py-1 pl-1 pr-3 text-xs transition ${
-                  isCurrent
-                    ? "bg-gray-900 text-white shadow-sm"
-                    : isDone
-                      ? "bg-gray-100 text-gray-900"
-                      : "bg-gray-50 text-gray-400"
-                }`}
-              >
-                <span
-                  className={`flex h-5 w-5 items-center justify-center rounded-full text-[0.65rem] font-semibold ${
+                  className={`flex items-center gap-2 rounded-full py-1 pl-1 pr-3 text-xs transition ${
                     isCurrent
-                      ? "bg-white text-gray-900"
+                      ? "bg-gray-900 text-white shadow-sm"
                       : isDone
-                        ? "bg-gray-900 text-white"
-                        : "bg-gray-200 text-gray-500"
+                        ? "bg-gray-100 text-gray-900"
+                        : "bg-gray-50 text-gray-400"
                   }`}
                 >
-                  {isDone ? "✓" : index + 1}
+                  <span
+                    className={`flex h-5 w-5 items-center justify-center rounded-full text-[0.65rem] font-semibold ${
+                      isCurrent
+                        ? "bg-white text-gray-900"
+                        : isDone
+                          ? "bg-gray-900 text-white"
+                          : "bg-gray-200 text-gray-500"
+                    }`}
+                  >
+                    {isDone ? "✓" : index + 1}
+                  </span>
+                  <span className={isCurrent ? "font-medium" : ""}>{label}</span>
                 </span>
-                <span className={isCurrent ? "font-medium" : ""}>{label}</span>
-              </span>
-            </li>
-          );
-        })}
-      </ol>
+              </li>
+            );
+          })}
+        </ol>
+      )}
 
       {step === "plan" && (
         <>
           <fieldset>
-            <legend className="sr-only">Elegí tu experiencia Orí</legend>
-            <div className="grid gap-4 sm:grid-cols-2">
-              {plans.map((plan) => (
-                <label
-                  key={plan.id}
-                  className={`ori-product-card ${
-                    selectedPlanId === plan.id ? "ori-product-card-selected" : ""
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="planChoice"
-                    value={plan.id}
-                    checked={selectedPlanId === plan.id}
-                    onChange={() => handlePlanChange(plan.id)}
-                    className="sr-only"
-                  />
-                  <span className="text-lg font-semibold tracking-tight text-gray-900">
-                    {plan.name}
-                  </span>
-                  <span className="mt-2 block text-base font-medium text-gray-900">
-                    {formatPlanPrice(plan)}
-                  </span>
-                  {plan.description && (
-                    <span className="mt-2 block text-sm text-gray-500">
-                      {plan.description}
+            <legend className="sr-only">Elegí tu experiencia</legend>
+            <div className={planGridClass}>
+              {plans.map((plan, index) => {
+                const selected = selectedPlanId === plan.id;
+                const accent = PLAN_ACCENTS[index % PLAN_ACCENTS.length];
+                return (
+                  <label
+                    key={plan.id}
+                    className={`ori-plan-card ${
+                      selected ? "ori-plan-card-selected" : ""
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="planChoice"
+                      value={plan.id}
+                      checked={selected}
+                      onChange={() => handlePlanChange(plan.id)}
+                      className="sr-only"
+                    />
+                    <span
+                      className="ori-plan-accent"
+                      style={{ backgroundColor: accent }}
+                      aria-hidden
+                    />
+                    <span className="ori-section-label pr-12">
+                      {planTagline(plan)}
                     </span>
-                  )}
-                  <span className="mt-4 inline-block text-sm font-medium text-blue-600">
-                    {selectedPlanId === plan.id
-                      ? "Tu elección"
-                      : "Elegir experiencia"}
-                  </span>
-                </label>
-              ))}
+                    <span className="mt-4 block pr-8 text-xl font-bold uppercase tracking-[0.05em] text-gray-900 sm:text-2xl">
+                      {plan.name}
+                    </span>
+                    <span className="mt-5 block h-px w-10 bg-gray-300" />
+                    <span className="mt-5 block text-base font-semibold text-gray-900">
+                      {formatPlanPrice(plan)}
+                    </span>
+                    {plan.description && (
+                      <span className="mt-4 block flex-1 text-[0.95rem] leading-relaxed text-gray-600">
+                        {plan.description}
+                      </span>
+                    )}
+                    <span
+                      className={`mt-8 text-xs font-semibold uppercase tracking-[0.18em] transition-colors ${
+                        selected ? "text-gray-900" : "text-gray-400"
+                      }`}
+                    >
+                      {selected ? "Tu elección ✓" : "Elegir →"}
+                    </span>
+                  </label>
+                );
+              })}
             </div>
           </fieldset>
 
           {!selectedPlanId && (
-            <p className="mt-4 text-center text-sm text-gray-500 sm:text-left">
+            <p className="mt-6 text-sm text-gray-500">
               Elegí una experiencia para continuar.
             </p>
           )}
 
           {selectedPlan && selectedPlan.fields.length > 0 && (
-            <fieldset className="mt-6 space-y-4 rounded-2xl border border-gray-200 bg-white p-4">
+            <fieldset
+              className={`mt-8 space-y-4 rounded-2xl border border-gray-200 bg-white p-5 ${
+                isMarketing ? "mx-auto max-w-xl" : ""
+              }`}
+            >
               <legend className="px-1 text-sm font-medium text-gray-900">
                 Personalizá tu experiencia
               </legend>
@@ -453,13 +509,15 @@ export function JoinForm({
           )}
 
           {planReady && (
-            <button
-              type="button"
-              onClick={() => setStep("contact")}
-              className="ori-btn-primary mt-6 w-full"
-            >
-              Continuar
-            </button>
+            <div className={isMarketing ? "mx-auto mt-6 max-w-xl" : "mt-6"}>
+              <button
+                type="button"
+                onClick={() => setStep("contact")}
+                className="ori-btn-primary w-full"
+              >
+                Continuar
+              </button>
+            </div>
           )}
         </>
       )}
@@ -478,8 +536,16 @@ export function JoinForm({
               onChange={(event) => setEmail(event.target.value)}
               className="ori-input mt-1"
               autoComplete="email"
+              inputMode="email"
+              placeholder="nombre@ejemplo.com"
               required
+              aria-invalid={Boolean(emailValidationMessage(email))}
             />
+            {emailValidationMessage(email) && (
+              <p className="mt-1 text-xs text-red-600">
+                {emailValidationMessage(email)}
+              </p>
+            )}
           </div>
           <div>
             <label htmlFor="contactPhone" className="block text-sm text-gray-700">
@@ -489,11 +555,25 @@ export function JoinForm({
               id="contactPhone"
               type="tel"
               value={phone}
-              onChange={(event) => setPhone(event.target.value)}
+              onChange={(event) =>
+                setPhone(maskLocalPhoneInput(event.target.value))
+              }
               className="ori-input mt-1"
-              autoComplete="tel"
+              autoComplete="tel-national"
+              inputMode="tel"
+              placeholder="3511234567"
               required
+              aria-invalid={Boolean(phoneValidationMessage(phone))}
+              aria-describedby="contactPhone-hint"
             />
+            <p id="contactPhone-hint" className="mt-1 text-xs text-gray-500">
+              {LOCAL_PHONE_HINT}
+            </p>
+            {phoneValidationMessage(phone) && (
+              <p className="mt-1 text-xs text-red-600">
+                {phoneValidationMessage(phone)}
+              </p>
+            )}
           </div>
           <div>
             <label htmlFor="contactFirstName" className="block text-sm text-gray-700">
@@ -535,18 +615,22 @@ export function JoinForm({
           <div className="space-y-3">
             {(
               [
-                ["shipping", "Envío"],
-                ["andreani", "Sucursal Andreani"],
-                ["store_pickup", "Retiro en tienda amiga"],
+                ["shipping", "Envío", true],
+                ["andreani", "Sucursal Andreani", false],
+                ["store_pickup", "Retiro en tienda amiga", false],
               ] as const
-            ).map(([value, label]) => (
+            ).map(([value, label, enabled]) => (
               <label
                 key={value}
-                className={`flex cursor-pointer items-start gap-3 rounded-lg border px-4 py-3 ${
+                className={`flex items-start gap-3 rounded-lg border px-4 py-3 ${
+                  enabled
+                    ? "cursor-pointer"
+                    : "cursor-not-allowed opacity-60"
+                } ${
                   deliveryMethod === value
                     ? "border-gray-900 bg-gray-100"
                     : "border-gray-200"
-                } ${value === "store_pickup" ? "opacity-70" : ""}`}
+                }`}
               >
                 <input
                   type="radio"
@@ -554,11 +638,12 @@ export function JoinForm({
                   value={value}
                   checked={deliveryMethod === value}
                   onChange={() => handleDeliveryMethodChange(value)}
+                  disabled={!enabled}
                   className="mt-1"
                 />
                 <span>
                   <span className="block font-medium text-gray-900">{label}</span>
-                  {value === "store_pickup" && (
+                  {!enabled && (
                     <span className="mt-1 block text-xs text-gray-500">
                       Próximamente
                     </span>

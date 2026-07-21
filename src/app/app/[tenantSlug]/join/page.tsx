@@ -8,6 +8,43 @@ import { getTenantMpConnection } from "@/lib/mercadopago/oauth";
 import { getActivePlansForTenant } from "@/lib/plans/get-plans";
 import { getTenantBySlug } from "@/lib/tenants/get-tenant-by-slug";
 
+const JOIN_BENEFITS = [
+  {
+    title: "Café recién tostado",
+    body: "Cada envío sale fresco, listo para moler y disfrutar en casa.",
+  },
+  {
+    title: "Precio preferencial",
+    body: "Condiciones pensadas para quienes eligen formar parte.",
+  },
+  {
+    title: "A tu ritmo",
+    body: "Elegís frecuencia, cantidad y cómo querés recibirlo.",
+  },
+  {
+    title: "Siempre listo",
+    body: "Una buena taza esperándote, sin tener que acordarte de pedir.",
+  },
+] as const;
+
+const JOIN_STEPS = [
+  {
+    number: "01",
+    title: "Elegí tu experiencia",
+    body: "Mirás las opciones del comercio y elegís la que mejor va con vos.",
+  },
+  {
+    number: "02",
+    title: "Completá tus datos",
+    body: "Contacto, entrega y pago en unos pocos pasos claros.",
+  },
+  {
+    number: "03",
+    title: "Recibí tu café",
+    body: "Nosotros preparamos el envío y vos disfrutás en casa o en la oficina.",
+  },
+] as const;
+
 export default async function TenantJoinPage({
   params,
   searchParams,
@@ -81,8 +118,7 @@ export default async function TenantJoinPage({
   const plans = await getActivePlansForTenant(tenant.id);
   const mpConnection = await getTenantMpConnection(tenant.id);
   const paymentOptions = {
-    // Mercado Pago card checkout temporarily disabled — transfer only.
-    cardsEnabled: false,
+    cardsEnabled: Boolean(mpConnection),
     transferEnabled: Boolean(
       mpConnection?.transferAlias || mpConnection?.transferCbu,
     ),
@@ -97,7 +133,7 @@ export default async function TenantJoinPage({
         <div className="mx-auto max-w-md text-center">
           <h1 className="ori-title">{tenant.name}</h1>
           <p className="ori-subtitle mt-4">
-            Todavía no hay suscripciones disponibles. Pedile al administrador
+            Todavía no hay experiencias disponibles. Pedile al administrador
             que configure una en el panel.
           </p>
         </div>
@@ -129,7 +165,7 @@ export default async function TenantJoinPage({
         </div>
       )}
       {loggedInAsManager && !isPreview && (
-        <div className="mb-8 rounded-lg border border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-800">
+        <div className="mb-8 rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-800">
           <p>
             Estás logueado como administrador ({currentUser!.email}). Podés
             registrarte como suscriptor abajo con <strong>otro email</strong>.
@@ -137,85 +173,86 @@ export default async function TenantJoinPage({
         </div>
       )}
 
-      <section className="mx-auto max-w-3xl py-6 text-center sm:py-10">
-        <p className="ori-eyebrow">Formá parte de Orí</p>
-        <h1 className="mt-4 text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl sm:leading-tight">
-          El café que elijas, recién tostado, todos los meses.
+      <section className="max-w-3xl pt-4 sm:pt-8">
+        <p className="ori-section-label">
+          {tenant.name} · elegí tu experiencia
+        </p>
+        <h1 className="mt-4 text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl">
+          Formá parte
         </h1>
-        <div className="mx-auto mt-6 max-w-2xl space-y-2 text-lg leading-relaxed text-gray-600">
-          <p>No se trata solamente de recibir café.</p>
-          <p className="font-medium text-gray-900">
-            Se trata de tener siempre una buena taza esperándote.
-          </p>
-        </div>
+        <p className="mt-5 max-w-xl text-base leading-relaxed text-gray-600 sm:text-lg">
+          No se trata solamente de recibir café. Se trata de tener siempre una
+          buena taza esperándote. Elegí la experiencia que mejor va con vos.
+        </p>
       </section>
 
-      <section className="mx-auto mt-8 max-w-4xl rounded-3xl border border-gray-200 bg-gray-50 px-6 py-8 sm:px-10 sm:py-10">
-        <div className="text-center">
-          <p className="ori-eyebrow">Una experiencia pensada para vos</p>
-          <h2 className="mt-3 text-2xl font-semibold tracking-tight text-gray-900">
-            ¿Por qué formar parte de Orí?
-          </h2>
-        </div>
-        <ul className="mx-auto mt-8 grid max-w-3xl gap-3 sm:grid-cols-2">
-          {[
-            "Café recién tostado para cada envío.",
-            "Precio preferencial para suscriptores.",
-            "Elegís cómo y cada cuánto recibirlo.",
-            "Beneficios exclusivos por formar parte.",
-            "Siempre listo cuando lo necesitás.",
-          ].map((benefit) => (
-            <li
-              key={benefit}
-              className="flex items-start gap-3 rounded-xl bg-white px-4 py-3 text-sm text-gray-700"
-            >
-              <span
-                className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gray-900 text-xs font-semibold text-white"
-                aria-hidden
-              >
-                ✓
-              </span>
-              <span>{benefit}</span>
+      <section className="mt-12 sm:mt-14">
+        <JoinForm
+          tenantSlug={tenant.slug}
+          plans={plans}
+          paymentOptions={paymentOptions}
+          layout="marketing"
+        />
+      </section>
+
+      <section className="mt-20 border-t border-gray-200/80 pt-14 sm:mt-24 sm:pt-16">
+        <p className="ori-section-label">Incluye</p>
+        <h2 className="mt-3 text-3xl font-bold tracking-tight text-gray-900">
+          Beneficios de formar parte
+        </h2>
+        <ul className="mt-10 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+          {JOIN_BENEFITS.map((benefit) => (
+            <li key={benefit.title}>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-900">
+                {benefit.title}
+              </p>
+              <p className="mt-3 text-sm leading-relaxed text-gray-500">
+                {benefit.body}
+              </p>
             </li>
           ))}
         </ul>
       </section>
 
-      <div className="mx-auto mt-14 max-w-2xl text-center">
-        <p className="ori-eyebrow">Tu café, a tu manera</p>
-        <h2 className="mt-3 text-2xl font-semibold tracking-tight text-gray-900 sm:text-3xl">
-          Elegí la experiencia que mejor va con vos
+      <section className="mt-16 border-t border-gray-200/80 pt-14 sm:mt-20 sm:pt-16">
+        <p className="ori-section-label">Cómo funciona</p>
+        <h2 className="mt-3 text-3xl font-bold tracking-tight text-gray-900">
+          Tres pasos
         </h2>
-        <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-gray-600">
-          Elegí tu café, la frecuencia y cómo querés recibirlo. Del tostado a tu
-          taza, cuidamos cada detalle.
-        </p>
-      </div>
+        <ol className="mt-10 grid gap-10 sm:grid-cols-3">
+          {JOIN_STEPS.map((item) => (
+            <li key={item.number}>
+              <p className="text-xs font-medium tracking-[0.16em] text-gray-400">
+                {item.number}
+              </p>
+              <p className="mt-3 text-base font-semibold text-gray-900">
+                {item.title}
+              </p>
+              <p className="mt-2 text-sm leading-relaxed text-gray-500">
+                {item.body}
+              </p>
+            </li>
+          ))}
+        </ol>
+      </section>
 
-      <div className="mx-auto mt-8 w-full max-w-xl">
-        <JoinForm
-          tenantSlug={tenant.slug}
-          plans={plans}
-          paymentOptions={paymentOptions}
-        />
-        <p className="mt-6 text-center text-sm text-gray-500">
-          ¿Ya tenés cuenta?{" "}
-          <Link
-            href={`/auth/login?next=/app/${tenant.slug}/join`}
-            className="text-gray-700 hover:text-gray-600"
-          >
-            Iniciar sesión
-          </Link>
-        </p>
-      </div>
+      <p className="mt-16 pb-4 text-center text-sm text-gray-500 sm:mt-20">
+        ¿Ya tenés cuenta?{" "}
+        <Link
+          href={`/auth/login?next=/app/${tenant.slug}/join`}
+          className="font-medium text-gray-800 underline-offset-4 hover:underline"
+        >
+          Iniciar sesión
+        </Link>
+      </p>
     </JoinShell>
   );
 }
 
 function JoinShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="ori-container py-12 sm:py-16">
-      {children}
+    <div className="bg-[#f6f6f4]">
+      <div className="ori-container py-10 sm:py-14">{children}</div>
     </div>
   );
 }

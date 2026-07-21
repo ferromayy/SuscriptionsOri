@@ -80,7 +80,7 @@ export default async function ManagerEditSubscriptionPage({
         submitLabel="Guardar cambios"
         actingAsUserId={userId}
         paymentOptions={{
-          cardsEnabled: false,
+          cardsEnabled: Boolean(mpConnection),
           transferEnabled: Boolean(
             mpConnection?.transferAlias || mpConnection?.transferCbu,
           ),

@@ -25,6 +25,15 @@ import type {
   BillingCycleDays,
 } from "@/lib/subscribers/checkout-schemas";
 import { isValidArgentinePostalCode } from "@/lib/subscribers/argentine-postal-code";
+import {
+  LOCAL_PHONE_HINT,
+  emailValidationMessage,
+  isValidEmail,
+  isValidLocalArgentinePhone,
+  maskLocalPhoneInput,
+  normalizeLocalArgentinePhone,
+  phoneValidationMessage,
+} from "@/lib/subscribers/contact-validation";
 import { normalizeBillingCycleDays } from "@/lib/subscribers/billing-cycle";
 import { PostalCodeField } from "@/components/subscribers/postal-code-field";
 import { ProvinceLocalityFields } from "@/components/subscribers/province-locality-fields";
@@ -113,8 +122,8 @@ function isContactComplete(contact: {
   lastName: string;
 }) {
   return (
-    contact.email.trim().includes("@") &&
-    contact.phone.trim().length >= 6 &&
+    isValidEmail(contact.email) &&
+    isValidLocalArgentinePhone(contact.phone) &&
     contact.firstName.trim().length > 0 &&
     contact.lastName.trim().length > 0
   );
@@ -248,7 +257,7 @@ export function ManageSubscriptionForm({
     paymentMethod
       ? {
           email: email.trim(),
-          phone: phone.trim(),
+          phone: normalizeLocalArgentinePhone(phone),
           firstName: firstName.trim(),
           lastName: lastName.trim(),
           deliveryMethod,
@@ -529,13 +538,32 @@ export function ManageSubscriptionForm({
       {step === "contact" && (
         <section className="space-y-4">
           <h2 className="text-lg font-medium text-gray-900">Datos de contacto</h2>
-          <Input
-            label="Correo electrónico"
-            type="email"
-            value={email}
-            onChange={setEmail}
-          />
-          <Input label="Número de teléfono" value={phone} onChange={setPhone} />
+          <div>
+            <Input
+              label="Correo electrónico"
+              type="email"
+              value={email}
+              onChange={setEmail}
+            />
+            {emailValidationMessage(email) && (
+              <p className="mt-1 text-xs text-red-600">
+                {emailValidationMessage(email)}
+              </p>
+            )}
+          </div>
+          <div>
+            <Input
+              label="Número de teléfono"
+              value={phone}
+              onChange={(value) => setPhone(maskLocalPhoneInput(value))}
+            />
+            <p className="mt-1 text-xs text-gray-500">{LOCAL_PHONE_HINT}</p>
+            {phoneValidationMessage(phone) && (
+              <p className="mt-1 text-xs text-red-600">
+                {phoneValidationMessage(phone)}
+              </p>
+            )}
+          </div>
           <Input label="Nombre" value={firstName} onChange={setFirstName} />
           <Input label="Apellido" value={lastName} onChange={setLastName} />
           <StepNav
@@ -552,14 +580,18 @@ export function ManageSubscriptionForm({
           <div className="space-y-3">
             {(
               [
-                ["shipping", "Envío"],
-                ["andreani", "Sucursal Andreani"],
-                ["store_pickup", "Retiro en tienda amiga"],
+                ["shipping", "Envío", true],
+                ["andreani", "Sucursal Andreani", false],
+                ["store_pickup", "Retiro en tienda amiga", false],
               ] as const
-            ).map(([value, label]) => (
+            ).map(([value, label, enabled]) => (
               <label
                 key={value}
-                className={`flex cursor-pointer items-start gap-3 rounded-lg border px-4 py-3 ${
+                className={`flex items-start gap-3 rounded-lg border px-4 py-3 ${
+                  enabled
+                    ? "cursor-pointer"
+                    : "cursor-not-allowed opacity-60"
+                } ${
                   deliveryMethod === value
                     ? "border-gray-900 bg-gray-100"
                     : "border-gray-200"
@@ -571,11 +603,12 @@ export function ManageSubscriptionForm({
                   value={value}
                   checked={deliveryMethod === value}
                   onChange={() => handleDeliveryMethodChange(value)}
+                  disabled={!enabled}
                   className="mt-1"
                 />
                 <span>
                   <span className="block font-medium text-gray-900">{label}</span>
-                  {value === "store_pickup" && (
+                  {!enabled && (
                     <span className="mt-1 block text-xs text-gray-500">
                       Próximamente
                     </span>

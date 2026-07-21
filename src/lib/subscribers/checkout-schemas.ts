@@ -5,6 +5,15 @@ import {
   isValidArgentinePostalCode,
   normalizeArgentinePostalCode,
 } from "@/lib/subscribers/argentine-postal-code";
+import {
+  EMAIL_FORMAT_ERROR,
+  LOCAL_PHONE_COUNTRY_CODE_ERROR,
+  LOCAL_PHONE_FORMAT_ERROR,
+  hasArgentineCountryPrefix,
+  isValidEmail,
+  isValidLocalArgentinePhone,
+  normalizeLocalArgentinePhone,
+} from "@/lib/subscribers/contact-validation";
 
 export const deliveryMethodSchema = z.enum([
   "shipping",
@@ -39,6 +48,33 @@ const argentinePostalCodeSchema = z
 
 const provinceSchema = z.string().trim().min(1, "Elegí la provincia");
 
+const contactEmailSchema = z
+  .string()
+  .trim()
+  .min(1, "Ingresá tu correo electrónico")
+  .refine(isValidEmail, EMAIL_FORMAT_ERROR);
+
+const localPhoneSchema = z
+  .string()
+  .trim()
+  .min(1, "Ingresá tu teléfono")
+  .superRefine((value, ctx) => {
+    if (hasArgentineCountryPrefix(value)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: LOCAL_PHONE_COUNTRY_CODE_ERROR,
+      });
+      return;
+    }
+    if (!isValidLocalArgentinePhone(value)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: LOCAL_PHONE_FORMAT_ERROR,
+      });
+    }
+  })
+  .transform(normalizeLocalArgentinePhone);
+
 const shippingDetailsSchema = z.object({
   province: provinceSchema,
   locality: z.string().trim().min(1, "Ingresá la localidad"),
@@ -48,7 +84,8 @@ const shippingDetailsSchema = z.object({
   apartment: z.string().trim().optional(),
 });
 
-const andreaniDetailsSchema = z.object({
+// Kept for when Andreani se habilite de nuevo (hoy figura como "Próximamente").
+export const andreaniDetailsSchema = z.object({
   province: provinceSchema,
   locality: z.string().trim().min(1, "Ingresá la localidad"),
   postalCode: argentinePostalCodeSchema,
@@ -58,8 +95,8 @@ const andreaniDetailsSchema = z.object({
 
 export const checkoutDetailsSchema = z
   .object({
-    email: z.string().email("Email inválido"),
-    phone: z.string().trim().min(6, "Ingresá un teléfono válido"),
+    email: contactEmailSchema,
+    phone: localPhoneSchema,
     firstName: z.string().trim().min(1, "Ingresá tu nombre"),
     lastName: z.string().trim().min(1, "Ingresá tu apellido"),
     deliveryMethod: deliveryMethodSchema,
@@ -72,7 +109,13 @@ export const checkoutDetailsSchema = z
     /** Path in Supabase Storage for the uploaded receipt. */
     paymentReceiptPath: z.string().trim().optional(),
     /** Email of the Mercado Pago account used to pay (can differ from Ori email). */
-    mpPayerEmail: z.string().trim().email("Email de Mercado Pago inválido").optional(),
+    mpPayerEmail: z
+      .string()
+      .trim()
+      .refine((value) => !value || isValidEmail(value), {
+        message: "Email de Mercado Pago inválido",
+      })
+      .optional(),
   })
   .superRefine((data, ctx) => {
     if (data.deliveryMethod === "store_pickup") {
@@ -84,25 +127,22 @@ export const checkoutDetailsSchema = z
       return;
     }
 
+    // Andreani UI is disabled for now ("Próximamente"); reject just in case.
+    if (data.deliveryMethod === "andreani") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Sucursal Andreani estará disponible próximamente",
+        path: ["deliveryMethod"],
+      });
+      return;
+    }
+
     if (data.deliveryMethod === "shipping") {
       const parsed = shippingDetailsSchema.safeParse(data.deliveryDetails);
       if (!parsed.success) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           message: parsed.error.issues[0]?.message ?? "Completá los datos de envío",
-          path: ["deliveryDetails"],
-        });
-      }
-    }
-
-    if (data.deliveryMethod === "andreani") {
-      const parsed = andreaniDetailsSchema.safeParse(data.deliveryDetails);
-      if (!parsed.success) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message:
-            parsed.error.issues[0]?.message ??
-            "Completá los datos de la sucursal Andreani",
           path: ["deliveryDetails"],
         });
       }

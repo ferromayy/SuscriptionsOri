@@ -178,14 +178,15 @@ export async function upsertSubscriberSubscription(
 
   const mpConnection = await getTenantMpConnection(tenantId);
   if (
-    parsedCheckout.paymentMethod !== "transfer" &&
-    (parsedCheckout.paymentMethod === "card_monthly" ||
-      parsedCheckout.paymentMethod === "card_annual")
+    parsedCheckout.paymentMethod === "card_monthly" ||
+    parsedCheckout.paymentMethod === "card_annual"
   ) {
-    return {
-      error:
-        "El pago con tarjeta no está disponible por ahora. Usá transferencia.",
-    };
+    if (!mpConnection) {
+      return {
+        error:
+          "Este comercio todavía no conectó Mercado Pago. Pedile al administrador que lo configure en Pagos.",
+      };
+    }
   }
 
   if (

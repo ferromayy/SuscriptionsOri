@@ -19,7 +19,7 @@ export default async function ManagerSubscribePage({
   const plans = await getActivePlansForTenant(tenant.id);
   const mpConnection = await getTenantMpConnection(tenant.id);
   const paymentOptions = {
-    cardsEnabled: false,
+    cardsEnabled: Boolean(mpConnection),
     transferEnabled: Boolean(
       mpConnection?.transferAlias || mpConnection?.transferCbu,
     ),

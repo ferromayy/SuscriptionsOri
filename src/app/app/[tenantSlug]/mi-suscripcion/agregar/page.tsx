@@ -39,8 +39,7 @@ export default async function AddSubscriptionPage({
   const availablePlans = allPlans.filter((plan) => !ownedPlanIds.has(plan.id));
   const mpConnection = await getTenantMpConnection(tenant.id);
   const paymentOptions = {
-    // Mercado Pago card checkout temporarily disabled — transfer only.
-    cardsEnabled: false,
+    cardsEnabled: Boolean(mpConnection),
     transferEnabled: Boolean(
       mpConnection?.transferAlias || mpConnection?.transferCbu,
     ),
