@@ -49,6 +49,15 @@ export type PaymentEventKind =
   | "rejected"
   | "cancelled";
 
+export type PaymentCycleStatus =
+  | "upcoming"
+  | "awaiting_payment"
+  | "submitted"
+  | "paid"
+  | "past_due"
+  | "failed"
+  | "cancelled";
+
 export type DeliveryFulfillmentStatus = "ready" | "shipped";
 
 export interface Database {
@@ -612,6 +621,72 @@ export interface Database {
           external_id?: string | null;
           notes?: string | null;
           created_at?: string;
+        };
+        Relationships: [];
+      };
+      payment_cycles: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          subscription_id: string;
+          user_id: string;
+          cycle_number: number;
+          period_start: string;
+          due_on: string;
+          amount_cents: number;
+          payment_method: PaymentMethod;
+          status: PaymentCycleStatus;
+          payment_reference: string | null;
+          payment_receipt_path: string | null;
+          external_id: string | null;
+          submitted_at: string | null;
+          paid_at: string | null;
+          reminder_email_sent_at: string | null;
+          reminder_whatsapp_opened_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id: string;
+          subscription_id: string;
+          user_id: string;
+          cycle_number: number;
+          period_start: string;
+          due_on: string;
+          amount_cents: number;
+          payment_method: PaymentMethod;
+          status?: PaymentCycleStatus;
+          payment_reference?: string | null;
+          payment_receipt_path?: string | null;
+          external_id?: string | null;
+          submitted_at?: string | null;
+          paid_at?: string | null;
+          reminder_email_sent_at?: string | null;
+          reminder_whatsapp_opened_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          tenant_id?: string;
+          subscription_id?: string;
+          user_id?: string;
+          cycle_number?: number;
+          period_start?: string;
+          due_on?: string;
+          amount_cents?: number;
+          payment_method?: PaymentMethod;
+          status?: PaymentCycleStatus;
+          payment_reference?: string | null;
+          payment_receipt_path?: string | null;
+          external_id?: string | null;
+          submitted_at?: string | null;
+          paid_at?: string | null;
+          reminder_email_sent_at?: string | null;
+          reminder_whatsapp_opened_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
         };
         Relationships: [];
       };

@@ -242,6 +242,20 @@ export async function searchAuthorizedPayments(
   return data.results ?? [];
 }
 
+export async function fetchAuthorizedPayment(
+  tenantId: string,
+  authorizedPaymentId: string,
+): Promise<AuthorizedPaymentRemote | null> {
+  const accessToken = await getValidAccessTokenForTenant(tenantId);
+  if (!accessToken) return null;
+  const response = await fetch(
+    `${getMpApiBaseUrl()}/authorized_payments/${encodeURIComponent(authorizedPaymentId)}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  if (!response.ok) return null;
+  return (await response.json()) as AuthorizedPaymentRemote;
+}
+
 /**
  * Finds the most recent rejected invoice payment for a preapproval.
  * MP cancels subscriptions after rejected charges but the preapproval

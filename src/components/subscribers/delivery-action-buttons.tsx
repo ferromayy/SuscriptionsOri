@@ -18,6 +18,7 @@ export function DeliveryActionButtons({
   quantity,
   phone,
   status,
+  paymentConfirmed,
 }: {
   tenantSlug: string;
   subscriptionId: string;
@@ -27,6 +28,7 @@ export function DeliveryActionButtons({
   quantity: string;
   phone: string | null;
   status: "pending" | "ready" | "shipped";
+  paymentConfirmed: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -92,11 +94,17 @@ export function DeliveryActionButtons({
         <span className="text-center text-xs text-gray-400">Sin teléfono</span>
       )}
 
+      {!paymentConfirmed && (
+        <span className="rounded-md bg-amber-50 px-2 py-1 text-center text-[0.65rem] font-semibold uppercase tracking-wide text-amber-800">
+          Pago sin confirmar
+        </span>
+      )}
+
       {status === "pending" && (
         <button
           type="button"
           onClick={markReady}
-          disabled={pending}
+          disabled={pending || !paymentConfirmed}
           className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-800 transition hover:border-gray-400 disabled:opacity-60"
           title="Marca interno: el pedido ya está armado/finalizado por nosotros"
         >
@@ -108,7 +116,7 @@ export function DeliveryActionButtons({
         <button
           type="button"
           onClick={markShipped}
-          disabled={pending}
+          disabled={pending || !paymentConfirmed}
           className="rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-gray-800 disabled:opacity-60"
           title="Avisa al cliente por email y WhatsApp que el envío ya salió"
         >

@@ -178,10 +178,13 @@ export async function upsertSubscriberSubscription(
   }
 
   const mpConnection = await getTenantMpConnection(tenantId);
-  if (
-    parsedCheckout.paymentMethod === "card_monthly" ||
-    parsedCheckout.paymentMethod === "card_annual"
-  ) {
+  if (parsedCheckout.paymentMethod === "card_annual") {
+    return {
+      error:
+        "La modalidad anual no está disponible. Los cobros se realizan cada 30 días.",
+    };
+  }
+  if (parsedCheckout.paymentMethod === "card_monthly") {
     if (!CARD_PAYMENTS_ENABLED) {
       return {
         error:

@@ -7,6 +7,11 @@ import { z } from "zod";
 import { passwordSchema } from "@/lib/auth/schemas";
 import { requestPasswordReset } from "@/lib/auth/password-reset";
 import { createDbClient } from "@/lib/db/client";
+import {
+  confirmPaymentCycle,
+  ensureCurrentPaymentCycle,
+  isCyclePaidForDelivery,
+} from "@/lib/payments/payment-cycles";
 import { fieldChoiceSchema } from "@/lib/plans/schemas";
 import { createManagedSubscriber } from "@/lib/subscribers/create-managed-subscriber";
 import { ensureSubscriberMembership } from "@/lib/subscribers/ensure-subscriber-membership";
@@ -123,17 +128,26 @@ export async function confirmTransferPaymentAction(
     return { error: null, success: "Esta suscripción ya estaba activa" };
   }
 
-  const { error: updateError } = await db
-    .from("subscriptions")
-    .update({
-      status: "active",
-      payment_status: "authorized",
-    })
-    .eq("id", subscription.id)
-    .eq("tenant_id", tenant.id);
-
-  if (updateError) {
-    return { error: updateError.message };
+  const cycle = await ensureCurrentPaymentCycle(subscription.id);
+  if (cycle) {
+    const confirmed = await confirmPaymentCycle({
+      cycleId: cycle.id,
+      tenantId: tenant.id,
+      source: "transfer",
+    });
+    if ("error" in confirmed) {
+      return { error: confirmed.error };
+    }
+  } else {
+    const { error: updateError } = await db
+      .from("subscriptions")
+      .update({
+        status: "active",
+        payment_status: "authorized",
+      })
+      .eq("id", subscription.id)
+      .eq("tenant_id", tenant.id);
+    if (updateError) return { error: updateError.message };
   }
 
   const membership = await ensureSubscriberMembership(
@@ -144,7 +158,9 @@ export async function confirmTransferPaymentAction(
     return { error: membership.error };
   }
 
-  await recordConfirmedSubscriptionPayment(subscription.id);
+  if (!cycle) {
+    await recordConfirmedSubscriptionPayment(subscription.id);
+  }
 
   revalidatePath(`/app/${tenantSlug}/suscriptores`);
   revalidatePath(`/app/${tenantSlug}/suscriptores/${subscription.user_id}`);
@@ -544,6 +560,12 @@ export async function markDeliveryReadyAction(
   if (subError || !subscription) {
     return { error: subError?.message ?? "Suscripción no encontrada" };
   }
+  if (!(await isCyclePaidForDelivery(subscription.id, due))) {
+    return {
+      error:
+        "No se puede preparar este pedido: el ciclo todavía no tiene el pago confirmado.",
+    };
+  }
 
   const now = new Date().toISOString();
   const { data: existing } = await db
@@ -603,6 +625,12 @@ export async function markDeliveryShippedAction(
 
   if (subError || !subscription) {
     return { error: subError?.message ?? "Suscripción no encontrada" };
+  }
+  if (!(await isCyclePaidForDelivery(subscription.id, due))) {
+    return {
+      error:
+        "No se puede enviar este pedido: el ciclo todavía no tiene el pago confirmado.",
+    };
   }
 
   const { data: user } = await db

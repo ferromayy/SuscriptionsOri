@@ -13,7 +13,9 @@ import {
   OAUTH_STATE_COOKIE,
   updateTransferDetails,
 } from "@/lib/mercadopago/oauth";
+import { createDbClient } from "@/lib/db/client";
 import { isMercadoPagoConfigured } from "@/lib/mercadopago/env";
+import { confirmPaymentCycle } from "@/lib/payments/payment-cycles";
 import { requireTenantAccess } from "@/lib/tenants/require-tenant-access";
 
 export type PagosActionState = {
@@ -127,4 +129,47 @@ export async function saveTransferDetailsAction(
 
   revalidatePath(`/app/${tenantSlug}/pagos`);
   return { error: null, success: "Datos de transferencia guardados" };
+}
+
+export async function confirmRenewalCycleAction(
+  tenantSlug: string,
+  cycleId: string,
+): Promise<PagosActionState> {
+  const { tenant } = await requireTenantAccess(tenantSlug, {
+    nextPath: `/app/${tenantSlug}/pagos`,
+    requireManager: true,
+  });
+  const result = await confirmPaymentCycle({
+    cycleId,
+    tenantId: tenant.id,
+    source: "transfer",
+  });
+  if ("error" in result) return { error: result.error };
+
+  revalidatePath(`/app/${tenantSlug}`);
+  revalidatePath(`/app/${tenantSlug}/pagos`);
+  revalidatePath(`/app/${tenantSlug}/suscriptores`);
+  return { error: null, success: "Pago confirmado y próximo ciclo generado" };
+}
+
+export async function markReminderWhatsAppOpenedAction(
+  tenantSlug: string,
+  cycleId: string,
+): Promise<PagosActionState> {
+  const { tenant } = await requireTenantAccess(tenantSlug, {
+    nextPath: `/app/${tenantSlug}/pagos`,
+    requireManager: true,
+  });
+  const db = createDbClient();
+  const { error } = await db
+    .from("payment_cycles")
+    .update({
+      reminder_whatsapp_opened_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", cycleId)
+    .eq("tenant_id", tenant.id);
+  if (error) return { error: error.message };
+  revalidatePath(`/app/${tenantSlug}/pagos`);
+  return { error: null, success: "WhatsApp abierto" };
 }

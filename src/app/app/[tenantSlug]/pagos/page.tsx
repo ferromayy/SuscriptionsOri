@@ -1,17 +1,37 @@
 import Link from "next/link";
 
 import { ConnectAccessTokenForm } from "@/components/payments/connect-access-token-form";
+import { ConfirmRenewalButton } from "@/components/payments/confirm-renewal-button";
 import { ConnectMercadoPagoButton } from "@/components/payments/connect-mercadopago-button";
 import { DisconnectMercadoPagoButton } from "@/components/payments/disconnect-mercadopago-button";
 import { PaymentHistoryList } from "@/components/payments/payment-history-list";
+import {
+  PaymentReminderList,
+  SubscriberPaymentReminder,
+  type PaymentReminderItem,
+} from "@/components/payments/payment-reminder-list";
 import { TransferDetailsForm } from "@/components/payments/transfer-details-form";
 import { TransferPaymentGuide } from "@/components/payments/transfer-payment-guide";
+import { TransferRenewalForm } from "@/components/payments/transfer-renewal-form";
 import { isTenantManager } from "@/lib/auth/permissions";
 import { createDbClient } from "@/lib/db/client";
+import { getAppUrl } from "@/lib/env";
 import { isMercadoPagoConfigured } from "@/lib/mercadopago/env";
 import { getTenantMpConnection } from "@/lib/mercadopago/oauth";
 import { fetchPreapproval } from "@/lib/mercadopago/subscriptions";
 import { listPaymentEvents } from "@/lib/payments/payment-events";
+import {
+  ensureCurrentPaymentCycle,
+  getOpenPaymentCycles,
+} from "@/lib/payments/payment-cycles";
+import { formatCents } from "@/lib/plans/money";
+import {
+  daysUntilDate,
+  formatCycleDate,
+  getNextPaymentDueDate,
+} from "@/lib/subscribers/billing-cycle";
+import { buildWhatsAppUrl } from "@/lib/subscribers/whatsapp";
+import { getPaymentReceiptSignedUrl } from "@/lib/storage/payment-receipts";
 import { requireTenantAccess } from "@/lib/tenants/require-tenant-access";
 
 export default async function TenantPaymentsPage({
@@ -37,14 +57,54 @@ export default async function TenantPaymentsPage({
   if (!manager) {
     const { data: transferSubs } = await createDbClient()
       .from("subscriptions")
-      .select("id")
+      .select("id, created_at, billing_cycle_days, status")
       .eq("tenant_id", tenant.id)
       .eq("user_id", user.id)
       .eq("payment_method", "transfer")
       .is("deleted_at", null)
-      .limit(1);
+      .order("created_at", { ascending: false });
 
     const hasTransferSubscription = (transferSubs ?? []).length > 0;
+    for (const subscription of transferSubs ?? []) {
+      await ensureCurrentPaymentCycle(subscription.id);
+    }
+    const openCycles = await getOpenPaymentCycles({
+      tenantId: tenant.id,
+      userId: user.id,
+    });
+    const transferCycle = openCycles.find(
+      (cycle) => cycle.paymentMethod === "transfer",
+    );
+    const activeTransfer = (transferSubs ?? []).find(
+      (subscription) => subscription.status === "active",
+    );
+    let subscriberReminder:
+      | { dueDateLabel: string; daysUntilDue: number }
+      | null = null;
+    if (activeTransfer) {
+      const { data: latestPaidEvent } = await createDbClient()
+        .from("payment_events")
+        .select("due_on, paid_at, created_at")
+        .eq("subscription_id", activeTransfer.id)
+        .in("kind", ["confirmed", "charged"])
+        .order("paid_at", { ascending: false, nullsFirst: false })
+        .limit(1)
+        .maybeSingle();
+      const dueDate = getNextPaymentDueDate(
+        latestPaidEvent?.due_on ??
+          latestPaidEvent?.paid_at ??
+          latestPaidEvent?.created_at,
+        activeTransfer.created_at,
+        activeTransfer.billing_cycle_days,
+      );
+      const daysUntilDue = daysUntilDate(dueDate);
+      if (daysUntilDue <= 7) {
+        subscriberReminder = {
+          dueDateLabel: formatCycleDate(dueDate),
+          daysUntilDue,
+        };
+      }
+    }
 
     return (
       <div className="ori-container py-16">
@@ -54,10 +114,50 @@ export default async function TenantPaymentsPage({
           Historial de tus pagos, con fecha y día de cobro de cada ciclo.
         </p>
 
-        {hasTransferSubscription && (
+        {subscriberReminder && (
+          <section className="mt-8">
+            <SubscriberPaymentReminder
+              tenantSlug={tenant.slug}
+              dueDateLabel={subscriberReminder.dueDateLabel}
+              daysUntilDue={subscriberReminder.daysUntilDue}
+            />
+          </section>
+        )}
+
+        {hasTransferSubscription && !subscriberReminder && (
           <section className="mt-8">
             <TransferPaymentGuide tenantSlug={tenant.slug} />
           </section>
+        )}
+
+        {transferCycle &&
+          transferCycle.status !== "upcoming" &&
+          transferCycle.status !== "submitted" && (
+            <section className="mt-8 ori-card space-y-4">
+              <div>
+                <p className="ori-section-label">Transferencia</p>
+                <h2 className="mt-2 text-lg font-medium text-gray-900">
+                  Enviar comprobante del ciclo
+                </h2>
+                <p className="mt-2 text-sm text-gray-600">
+                  Vencimiento:{" "}
+                  {formatCycleDate(
+                    new Date(`${transferCycle.dueOn}T12:00:00`),
+                  )}
+                </p>
+              </div>
+              <TransferRenewalForm
+                tenantSlug={tenant.slug}
+                cycleId={transferCycle.id}
+              />
+            </section>
+          )}
+
+        {transferCycle?.status === "submitted" && (
+          <p className="mt-8 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            Recibimos el comprobante de este ciclo. Está esperando confirmación
+            del comercio.
+          </p>
         )}
 
         <section className="mt-8 ori-card space-y-4">
@@ -83,6 +183,111 @@ export default async function TenantPaymentsPage({
   const useTestToken = process.env.MP_USE_TEST_TOKEN === "true";
 
   const db = createDbClient();
+  const { data: transferSubscriptions } = await db
+    .from("subscriptions")
+    .select(
+      "id, user_id, plan_id, contact_first_name, contact_last_name, contact_phone, final_price_cents, billing_cycle_days, created_at",
+    )
+    .eq("tenant_id", tenant.id)
+    .eq("payment_method", "transfer")
+    .in("status", ["active", "past_due", "pending_payment"])
+    .is("deleted_at", null);
+
+  for (const subscription of transferSubscriptions ?? []) {
+    await ensureCurrentPaymentCycle(subscription.id);
+  }
+  const managerOpenCycles = await getOpenPaymentCycles({
+    tenantId: tenant.id,
+  });
+
+  const transferPlanIds = [
+    ...new Set((transferSubscriptions ?? []).map((sub) => sub.plan_id)),
+  ];
+  const { data: transferPlans } = transferPlanIds.length
+    ? await db
+        .from("plans")
+        .select("id, name, currency")
+        .in("id", transferPlanIds)
+        .is("deleted_at", null)
+    : { data: [] };
+  const transferPlansById = new Map(
+    (transferPlans ?? []).map((plan) => [plan.id, plan]),
+  );
+  const paymentReminders: PaymentReminderItem[] = (
+    transferSubscriptions ?? []
+  )
+    .map((subscription) => {
+      const openCycle = managerOpenCycles.find(
+        (cycle) => cycle.subscriptionId === subscription.id,
+      );
+      if (
+        !openCycle ||
+        openCycle.status === "submitted" ||
+        openCycle.reminderWhatsAppOpenedAt
+      ) {
+        return null;
+      }
+      const dueDate = new Date(`${openCycle.dueOn}T12:00:00`);
+      const daysUntilDue = daysUntilDate(dueDate);
+      const plan = transferPlansById.get(subscription.plan_id);
+      const subscriberName =
+        [
+          subscription.contact_first_name,
+          subscription.contact_last_name,
+        ]
+          .filter(Boolean)
+          .join(" ") || "Suscriptor";
+      const amountLabel = formatCents(
+        subscription.final_price_cents ?? 0,
+        plan?.currency ?? "ars",
+        30,
+      );
+      const dueDateLabel = formatCycleDate(dueDate);
+      const accountUrl = `${getAppUrl()}/app/${tenant.slug}/pagos`;
+      const transferDestination = [
+        connection?.transferHolderName
+          ? `Titular: ${connection.transferHolderName}.`
+          : "",
+        connection?.transferAlias ? `Alias: ${connection.transferAlias}.` : "",
+        connection?.transferCbu ? `CBU/CVU: ${connection.transferCbu}.` : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      const message =
+        `Hola ${subscriberName} 👋 Te recordamos que el pago de tu suscripción ` +
+        `${plan?.name ?? "de café"} por ${amountLabel} vence el ${dueDateLabel}. ` +
+        `${transferDestination} Después podés enviar el comprobante por acá ` +
+        `o gestionarlo desde ${accountUrl}. El pedido se prepara una vez confirmado el pago.`;
+
+      return {
+        cycleId: openCycle.id,
+        subscriptionId: subscription.id,
+        subscriberName,
+        planName: plan?.name ?? "Suscripción",
+        amountLabel,
+        dueDateLabel,
+        daysUntilDue,
+        whatsappUrl: buildWhatsAppUrl(subscription.contact_phone, message),
+      };
+    })
+    .filter(
+      (reminder): reminder is PaymentReminderItem =>
+        reminder !== null && reminder.daysUntilDue <= 7,
+    );
+
+  const submittedCycles = managerOpenCycles.filter(
+    (cycle) =>
+      cycle.paymentMethod === "transfer" && cycle.status === "submitted",
+  );
+  const submittedReceiptUrls = new Map<string, string>();
+  for (const cycle of submittedCycles) {
+    if (!cycle.paymentReceiptPath) continue;
+    const signedUrl = await getPaymentReceiptSignedUrl(
+      cycle.paymentReceiptPath,
+    );
+    if (signedUrl) submittedReceiptUrls.set(cycle.id, signedUrl);
+  }
+
   const { data: recentCardSubs } = await db
     .from("subscriptions")
     .select(
@@ -138,6 +343,88 @@ export default async function TenantPaymentsPage({
           tenantSlug={tenant.slug}
           showSubscriber
         />
+      </section>
+
+      <PaymentReminderList
+        tenantSlug={tenant.slug}
+        reminders={paymentReminders}
+      />
+
+      <section className="mt-8 ori-card space-y-4">
+        <div>
+          <p className="ori-section-label">Revisión humana</p>
+          <h2 className="mt-2 text-lg font-medium text-gray-900">
+            Comprobantes recurrentes por confirmar
+          </h2>
+        </div>
+        {submittedCycles.length === 0 ? (
+          <p className="text-sm text-gray-600">
+            No hay comprobantes recurrentes esperando confirmación.
+          </p>
+        ) : (
+          <ul className="space-y-3">
+            {submittedCycles.map((cycle) => {
+              const subscription = (transferSubscriptions ?? []).find(
+                (item) => item.id === cycle.subscriptionId,
+              );
+              const plan = subscription
+                ? transferPlansById.get(subscription.plan_id)
+                : null;
+              const name =
+                [
+                  subscription?.contact_first_name,
+                  subscription?.contact_last_name,
+                ]
+                  .filter(Boolean)
+                  .join(" ") || "Suscriptor";
+              const receiptUrl = submittedReceiptUrls.get(cycle.id);
+              return (
+                <li
+                  key={cycle.id}
+                  className="flex flex-col gap-4 rounded-xl border border-gray-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="text-sm">
+                    <p className="font-medium text-gray-900">{name}</p>
+                    <p className="mt-1 text-gray-600">
+                      {plan?.name ?? "Suscripción"} · Ciclo{" "}
+                      {cycle.cycleNumber} ·{" "}
+                      {formatCents(
+                        cycle.amountCents,
+                        plan?.currency ?? "ars",
+                        30,
+                      )}
+                    </p>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Vencimiento:{" "}
+                      {formatCycleDate(
+                        new Date(`${cycle.dueOn}T12:00:00`),
+                      )}
+                    </p>
+                    {cycle.paymentReference && (
+                      <p className="mt-1 text-gray-600">
+                        Operación: {cycle.paymentReference}
+                      </p>
+                    )}
+                    {receiptUrl && (
+                      <a
+                        href={receiptUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-2 inline-block font-medium text-gray-900 underline"
+                      >
+                        Ver comprobante
+                      </a>
+                    )}
+                  </div>
+                  <ConfirmRenewalButton
+                    tenantSlug={tenant.slug}
+                    cycleId={cycle.id}
+                  />
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </section>
 
       <section className="mt-8 ori-card space-y-4">

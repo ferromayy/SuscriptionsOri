@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/payment-cycles",
+      "schedule": "0 12 * * *"
+    }
+  ]
+}

@@ -16,6 +16,7 @@ import type { BillingCycleDays } from "@/lib/subscribers/checkout-schemas";
 import type {
   DeliveryFulfillmentStatus,
   DeliveryMethod,
+  PaymentCycleStatus,
 } from "@/types/database";
 
 export type WeeklyDeliveryChoice = {
@@ -37,6 +38,7 @@ export type WeeklyDeliveryRow = {
   deliveryMethod: DeliveryMethod | null;
   deliverySummary: string;
   fulfillmentStatus: "pending" | DeliveryFulfillmentStatus;
+  paymentStatus: PaymentCycleStatus | "legacy_unknown";
 };
 
 function summarizeDelivery(
@@ -90,6 +92,8 @@ export function buildWeeklyDeliveryRows(input: {
   choicesBySubscription?: Map<string, WeeklyDeliveryChoice[]>;
   /** Key: `${subscriptionId}:${YYYY-MM-DD}` */
   fulfillmentByKey?: Map<string, DeliveryFulfillmentStatus>;
+  /** Key: `${subscriptionId}:${YYYY-MM-DD}` */
+  paymentStatusByKey?: Map<string, PaymentCycleStatus>;
   referenceDate?: Date;
 }): { weekStart: Date; weekEnd: Date; rows: WeeklyDeliveryRow[] } {
   const { start: weekStart, end: weekEnd } = getSundaySaturdayWeek(
@@ -142,6 +146,9 @@ export function buildWeeklyDeliveryRows(input: {
         deliveryMethod,
         deliverySummary: summarizeDelivery(deliveryMethod, details),
         fulfillmentStatus,
+        paymentStatus:
+          input.paymentStatusByKey?.get(`${sub.id}:${dueOn}`) ??
+          "legacy_unknown",
       });
     }
   }
@@ -252,6 +259,10 @@ export function WeeklyDeliverySheet({
                       quantity={row.quantity}
                       phone={row.phone}
                       status={row.fulfillmentStatus}
+                      paymentConfirmed={
+                        row.paymentStatus === "paid" ||
+                        row.paymentStatus === "legacy_unknown"
+                      }
                     />
                   </td>
                   <td className="whitespace-nowrap px-3 py-3 text-right">

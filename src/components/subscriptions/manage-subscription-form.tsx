@@ -528,6 +528,10 @@ export function ManageSubscriptionForm({
               type="email"
               value={email}
               onChange={setEmail}
+              placeholder="nombre@ejemplo.com"
+              inputMode="email"
+              autoComplete="email"
+              invalid={Boolean(emailValidationMessage(email))}
             />
             {emailValidationMessage(email) && (
               <p className="mt-1 text-xs text-red-600">
@@ -538,8 +542,13 @@ export function ManageSubscriptionForm({
           <div>
             <Input
               label="Número de teléfono"
+              type="tel"
               value={phone}
               onChange={(value) => setPhone(maskLocalPhoneInput(value))}
+              placeholder="3511234567"
+              inputMode="tel"
+              autoComplete="tel-national"
+              invalid={Boolean(phoneValidationMessage(phone))}
             />
             <p className="mt-1 text-xs text-gray-500">{LOCAL_PHONE_HINT}</p>
             {phoneValidationMessage(phone) && (
@@ -548,8 +557,18 @@ export function ManageSubscriptionForm({
               </p>
             )}
           </div>
-          <Input label="Nombre" value={firstName} onChange={setFirstName} />
-          <Input label="Apellido" value={lastName} onChange={setLastName} />
+          <Input
+            label="Nombre"
+            value={firstName}
+            onChange={setFirstName}
+            autoComplete="given-name"
+          />
+          <Input
+            label="Apellido"
+            value={lastName}
+            onChange={setLastName}
+            autoComplete="family-name"
+          />
           <StepNav
             onBack={() => setStep("plan")}
             onNext={() => setStep("delivery")}
@@ -723,24 +742,12 @@ export function ManageSubscriptionForm({
 
           <div className="space-y-3">
             {paymentOptions?.cardsEnabled && (
-              <>
-                <PaymentOption
-                  checked={paymentMethod === "card_monthly"}
-                  onChange={() => setPaymentMethod("card_monthly")}
-                  title="Mensual con tarjeta"
-                  description="Cobro automático cada mes con Mercado Pago."
-                />
-                <PaymentOption
-                  checked={paymentMethod === "card_annual"}
-                  onChange={() => setPaymentMethod("card_annual")}
-                  title="Anual con tarjeta"
-                  description={
-                    selectedPlan
-                      ? `Cobro anual de ${formatCents(livePrice * 12, selectedPlan.currency, "year")}.`
-                      : "Cobro automático una vez al año."
-                  }
-                />
-              </>
+              <PaymentOption
+                checked={paymentMethod === "card_monthly"}
+                onChange={() => setPaymentMethod("card_monthly")}
+                title="Tarjeta"
+                description="Cobro automático cada 30 días con Mercado Pago."
+              />
             )}
             {(paymentOptions?.transferEnabled || isManager) && (
               <PaymentOption
@@ -925,11 +932,19 @@ function Input({
   value,
   onChange,
   type = "text",
+  placeholder,
+  inputMode,
+  autoComplete,
+  invalid,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   type?: string;
+  placeholder?: string;
+  inputMode?: "email" | "tel" | "text" | "numeric";
+  autoComplete?: string;
+  invalid?: boolean;
 }) {
   const id = label.toLowerCase().replace(/\s+/g, "-");
   return (
@@ -943,6 +958,10 @@ function Input({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         className="ori-input mt-1"
+        placeholder={placeholder}
+        inputMode={inputMode}
+        autoComplete={autoComplete}
+        aria-invalid={invalid || undefined}
       />
     </div>
   );

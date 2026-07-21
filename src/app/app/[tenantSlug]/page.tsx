@@ -1,12 +1,16 @@
 import Link from "next/link";
 
+import { SubscriberPaymentReminder } from "@/components/payments/payment-reminder-list";
 import { TransferPaymentGuide } from "@/components/payments/transfer-payment-guide";
 import { ResumePaymentButton } from "@/components/subscriptions/resume-payment-button";
 import { createDbClient } from "@/lib/db/client";
+import { getOpenPaymentCycles } from "@/lib/payments/payment-cycles";
 import { billingCycleLabel, formatCents } from "@/lib/plans/money";
 import {
+  daysUntilDate,
   formatCycleDate,
   getNextCycleDate,
+  getNextPaymentDueDate,
   normalizeBillingCycleDays,
 } from "@/lib/subscribers/billing-cycle";
 import {
@@ -67,6 +71,10 @@ export default async function TenantDashboardPage({
     .eq("user_id", user.id)
     .is("deleted_at", null)
     .order("created_at", { ascending: false });
+  const openPaymentCycles =
+    role === "subscriber"
+      ? await getOpenPaymentCycles({ tenantId: tenant.id, userId: user.id })
+      : [];
 
   const planIds = [...new Set((subscriptions ?? []).map((sub) => sub.plan_id))];
   const plansById = new Map<string, { name: string; currency: string }>();
@@ -84,6 +92,23 @@ export default async function TenantDashboardPage({
   }
 
   const subscriptionIds = (subscriptions ?? []).map((s) => s.id);
+  const latestPaidDueBySubscription = new Map<string, string>();
+  if (subscriptionIds.length > 0) {
+    const { data: paidEvents } = await db
+      .from("payment_events")
+      .select("subscription_id, due_on, paid_at, created_at")
+      .in("subscription_id", subscriptionIds)
+      .in("kind", ["confirmed", "charged"])
+      .order("paid_at", { ascending: false, nullsFirst: false });
+    for (const event of paidEvents ?? []) {
+      if (!latestPaidDueBySubscription.has(event.subscription_id)) {
+        latestPaidDueBySubscription.set(
+          event.subscription_id,
+          event.due_on ?? event.paid_at ?? event.created_at,
+        );
+      }
+    }
+  }
   const choicesBySub = new Map<
     string,
     Array<{ fieldLabel: string; value: string }>
@@ -186,6 +211,25 @@ export default async function TenantDashboardPage({
                 subscription.created_at,
                 cycleDays,
               );
+              const openPaymentCycle = openPaymentCycles.find(
+                (cycle) => cycle.subscriptionId === subscription.id,
+              );
+              const nextPaymentDue = openPaymentCycle
+                ? new Date(`${openPaymentCycle.dueOn}T12:00:00`)
+                : getNextPaymentDueDate(
+                    latestPaidDueBySubscription.get(subscription.id),
+                    subscription.created_at,
+                    cycleDays,
+                  );
+              const daysUntilPayment = daysUntilDate(nextPaymentDue);
+              const showTransferReminder =
+                subscription.payment_method === "transfer" &&
+                Boolean(openPaymentCycle) &&
+                openPaymentCycle?.status !== "submitted" &&
+                daysUntilPayment <= 7;
+              const renewalSubmitted =
+                subscription.payment_method === "transfer" &&
+                openPaymentCycle?.status === "submitted";
               const needsCardPayment =
                 subscription.status === "pending_authorization" &&
                 (subscription.payment_method === "card_monthly" ||
@@ -342,10 +386,26 @@ export default async function TenantDashboardPage({
                     </p>
                   )}
 
-                  {subscription.payment_method === "transfer" && (
+                  {renewalSubmitted && !isTransferPending && (
+                    <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                      Recibimos el comprobante de este ciclo. Está esperando
+                      confirmación del comercio.
+                    </p>
+                  )}
+
+                  {subscription.payment_method === "transfer" &&
+                    !showTransferReminder && (
                     <TransferPaymentGuide
                       tenantSlug={tenant.slug}
                       variant="compact"
+                    />
+                  )}
+
+                  {showTransferReminder && (
+                    <SubscriberPaymentReminder
+                      tenantSlug={tenant.slug}
+                      dueDateLabel={formatCycleDate(nextPaymentDue)}
+                      daysUntilDue={daysUntilPayment}
                     />
                   )}
                 </div>

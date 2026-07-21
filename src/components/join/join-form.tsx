@@ -781,24 +781,12 @@ export function JoinForm({
 
           <div className="space-y-3">
             {paymentOptions.cardsEnabled && (
-              <>
-                <PaymentOption
-                  checked={paymentMethod === "card_monthly"}
-                  onChange={() => setPaymentMethod("card_monthly")}
-                  title="Mensual con tarjeta"
-                  description="Cobro automático cada mes con Mercado Pago."
-                />
-                <PaymentOption
-                  checked={paymentMethod === "card_annual"}
-                  onChange={() => setPaymentMethod("card_annual")}
-                  title="Anual con tarjeta"
-                  description={
-                    selectedPlan
-                      ? `Cobro anual de ${formatCents(livePrice * 12, selectedPlan.currency, "year")}.`
-                      : "Cobro automático una vez al año."
-                  }
-                />
-              </>
+              <PaymentOption
+                checked={paymentMethod === "card_monthly"}
+                onChange={() => setPaymentMethod("card_monthly")}
+                title="Tarjeta"
+                description="Cobro automático cada 30 días con Mercado Pago."
+              />
             )}
             {paymentOptions.transferEnabled && (
               <PaymentOption

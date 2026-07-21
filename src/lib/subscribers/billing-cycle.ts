@@ -77,6 +77,62 @@ export function getNextCycleDate(
 }
 
 /**
+ * Upcoming cycle date including today. Unlike getNextCycleDate, a cycle due
+ * today is not skipped. Useful for reminders and payment action lists.
+ */
+export function getUpcomingCycleDate(
+  startedAt: string | Date,
+  cycleDays: number | null | undefined,
+  from: Date = new Date(),
+): Date {
+  const days = normalizeBillingCycleDays(cycleDays);
+  const start = startOfLocalDay(
+    typeof startedAt === "string" ? new Date(startedAt) : startedAt,
+  );
+  const today = startOfLocalDay(from);
+
+  if (Number.isNaN(start.getTime())) {
+    const fallback = new Date(today);
+    fallback.setDate(fallback.getDate() + days);
+    return fallback;
+  }
+
+  const cursor = new Date(start);
+  while (cursor.getTime() < today.getTime()) {
+    cursor.setDate(cursor.getDate() + days);
+  }
+  return cursor;
+}
+
+export function daysUntilDate(date: Date, from: Date = new Date()): number {
+  const target = startOfLocalDay(date);
+  const today = startOfLocalDay(from);
+  return Math.round(
+    (target.getTime() - today.getTime()) / (24 * 60 * 60 * 1000),
+  );
+}
+
+/** Next unpaid due date, anchored to the latest confirmed cycle. */
+export function getNextPaymentDueDate(
+  latestPaidDueOn: string | Date | null | undefined,
+  subscriptionStartedAt: string | Date,
+  cycleDays: number | null | undefined,
+): Date {
+  const days = normalizeBillingCycleDays(cycleDays);
+  const anchorValue = latestPaidDueOn ?? subscriptionStartedAt;
+  const anchor = startOfLocalDay(
+    typeof anchorValue === "string" ? new Date(anchorValue) : anchorValue,
+  );
+  if (Number.isNaN(anchor.getTime())) {
+    const fallback = startOfLocalDay(new Date());
+    fallback.setDate(fallback.getDate() + days);
+    return fallback;
+  }
+  anchor.setDate(anchor.getDate() + days);
+  return anchor;
+}
+
+/**
  * Cycle dates that fall on a calendar day within [rangeStart, rangeEnd]
  * (inclusive), using the same cadence as getNextCycleDate (start + k*N).
  */

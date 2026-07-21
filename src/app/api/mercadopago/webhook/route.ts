@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { createDbClient } from "@/lib/db/client";
 import {
+  fetchAuthorizedPayment,
   fetchPreapproval,
   findLatestRejectionDetail,
 } from "@/lib/mercadopago/subscriptions";
@@ -39,8 +40,115 @@ export async function POST(request: NextRequest) {
   ) {
     await syncPreapprovalById(resourceId);
   }
+  if (topic.includes("authorized_payment")) {
+    await syncAuthorizedPaymentById(resourceId);
+  }
 
   return NextResponse.json({ ok: true });
+}
+
+async function syncAuthorizedPaymentById(
+  authorizedPaymentId: string,
+): Promise<void> {
+  const db = createDbClient();
+  const externalId = `mp-authorized:${authorizedPaymentId}`;
+  const { data: alreadyProcessed } = await db
+    .from("payment_cycles")
+    .select("id, status")
+    .eq("external_id", externalId)
+    .maybeSingle();
+  if (alreadyProcessed?.status === "paid") return;
+
+  const { data: cardSubscriptions } = await db
+    .from("subscriptions")
+    .select("id, tenant_id, user_id, mp_preapproval_id, final_price_cents")
+    .in("payment_method", ["card_monthly", "card_annual"])
+    .not("mp_preapproval_id", "is", null)
+    .is("deleted_at", null);
+
+  const tenantIds = [
+    ...new Set((cardSubscriptions ?? []).map((sub) => sub.tenant_id)),
+  ];
+  for (const tenantId of tenantIds) {
+    const remote = await fetchAuthorizedPayment(
+      tenantId,
+      authorizedPaymentId,
+    );
+    if (!remote?.preapproval_id) continue;
+    const subscription = (cardSubscriptions ?? []).find(
+      (sub) =>
+        sub.tenant_id === tenantId &&
+        sub.mp_preapproval_id === remote.preapproval_id,
+    );
+    if (!subscription) continue;
+
+    const { ensureCurrentPaymentCycle, confirmPaymentCycle } = await import(
+      "@/lib/payments/payment-cycles"
+    );
+    const cycle = await ensureCurrentPaymentCycle(subscription.id);
+    if (!cycle) return;
+    const paymentStatus = remote.payment?.status ?? remote.status ?? "";
+    if (
+      paymentStatus === "approved" ||
+      paymentStatus === "authorized" ||
+      paymentStatus === "processed"
+    ) {
+      const result = await confirmPaymentCycle({
+        cycleId: cycle.id,
+        tenantId,
+        externalId,
+        source: "card",
+      });
+      if ("error" in result) {
+        console.error("[mercadopago] recurring cycle confirmation failed", {
+          authorizedPaymentId,
+          error: result.error,
+        });
+      }
+      return;
+    }
+
+    if (
+      paymentStatus === "rejected" ||
+      paymentStatus === "cancelled"
+    ) {
+      await db
+        .from("payment_cycles")
+        .update({
+          status: "failed",
+          external_id: externalId,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", cycle.id);
+      await db
+        .from("subscriptions")
+        .update({ status: "past_due" })
+        .eq("id", subscription.id);
+      const { recordPaymentEvent } = await import(
+        "@/lib/payments/payment-events"
+      );
+      await recordPaymentEvent({
+        tenantId,
+        subscriptionId: subscription.id,
+        userId: subscription.user_id,
+        source: "card",
+        kind: "rejected",
+        amountCents: cycle.amountCents,
+        billingCycleDays: 30,
+        dueOn: cycle.dueOn,
+        paidAt: null,
+        externalId,
+        notes:
+          remote.payment?.status_detail ??
+          "Cobro recurrente rechazado por Mercado Pago",
+      });
+      return;
+    }
+  }
+
+  console.warn("[mercadopago] authorized payment could not be matched", {
+    authorizedPaymentId,
+  });
 }
 
 async function syncPreapprovalById(preapprovalId: string): Promise<void> {

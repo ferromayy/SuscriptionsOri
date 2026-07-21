@@ -20,6 +20,7 @@ import { getTenantJoinUrl } from "@/lib/tenants/join-url";
 import { requireTenantAccess } from "@/lib/tenants/require-tenant-access";
 import type {
   DeliveryFulfillmentStatus,
+  PaymentCycleStatus,
   SubscriptionStatus,
 } from "@/types/database";
 
@@ -189,6 +190,7 @@ export default async function TenantSubscribersPage({
 
   const { start: weekStart, end: weekEnd } = getSundaySaturdayWeek();
   const fulfillmentByKey = new Map<string, DeliveryFulfillmentStatus>();
+  const paymentStatusByKey = new Map<string, PaymentCycleStatus>();
   {
     const { data: fulfillments, error: fulfillmentError } = await db
       .from("delivery_fulfillments")
@@ -208,6 +210,21 @@ export default async function TenantSubscribersPage({
     }
   }
 
+  if (subscriptionIds.length > 0) {
+    const { data: paymentCycles } = await db
+      .from("payment_cycles")
+      .select("subscription_id, due_on, status")
+      .in("subscription_id", subscriptionIds)
+      .gte("due_on", toDateKey(weekStart))
+      .lte("due_on", toDateKey(weekEnd));
+    for (const cycle of paymentCycles ?? []) {
+      paymentStatusByKey.set(
+        `${cycle.subscription_id}:${cycle.due_on}`,
+        cycle.status,
+      );
+    }
+  }
+
   const weeklyDeliveries = buildWeeklyDeliveryRows({
     subscriptions: (allSubscriptions ?? []).map((sub) => ({
       ...sub,
@@ -218,6 +235,7 @@ export default async function TenantSubscribersPage({
     usersById,
     choicesBySubscription,
     fulfillmentByKey,
+    paymentStatusByKey,
   });
 
   return (

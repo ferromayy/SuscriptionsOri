@@ -7,6 +7,7 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { getTenantRole } from "@/lib/auth/permissions";
 import { createDbClient } from "@/lib/db/client";
+import { submitTransferPaymentCycle } from "@/lib/payments/payment-cycles";
 import { centsToPesos } from "@/lib/plans/money";
 import { getActivePlansForTenant } from "@/lib/plans/get-plans";
 import { loadResolvedPlan } from "@/lib/plans/load-resolved-plan";
@@ -23,6 +24,10 @@ import { billingCycleDaysSchema } from "@/lib/subscribers/checkout-schemas";
 import { upsertSubscriberSubscription } from "@/lib/subscribers/join-subscriber";
 import { resolveCheckoutFromFormData } from "@/lib/subscribers/resolve-checkout";
 import { getTenantBySlug } from "@/lib/tenants/get-tenant-by-slug";
+import {
+  receiptFileFromFormData,
+  uploadPaymentReceipt,
+} from "@/lib/storage/payment-receipts";
 
 export type SubscriptionActionState = {
   error: string | null;
@@ -31,6 +36,47 @@ export type SubscriptionActionState = {
 export type ResumePaymentState = {
   error: string | null;
 };
+
+export type TransferRenewalState = {
+  error: string | null;
+  success?: string | null;
+};
+
+export async function submitTransferRenewalAction(
+  tenantSlug: string,
+  cycleId: string,
+  _prev: TransferRenewalState,
+  formData: FormData,
+): Promise<TransferRenewalState> {
+  const user = await getCurrentUser();
+  if (!user) return { error: "Iniciá sesión para subir el comprobante" };
+  const tenant = await getTenantBySlug(tenantSlug);
+  if (!tenant) return { error: "Comercio no encontrado" };
+
+  const reference = String(formData.get("paymentReference") ?? "").trim();
+  const file = receiptFileFromFormData(formData);
+  let receiptPath: string | null = null;
+  if (file) {
+    const uploaded = await uploadPaymentReceipt({ tenantId: tenant.id, file });
+    if ("error" in uploaded) return { error: uploaded.error };
+    receiptPath = uploaded.path;
+  }
+  const result = await submitTransferPaymentCycle({
+    cycleId,
+    userId: user.id,
+    paymentReference: reference || null,
+    paymentReceiptPath: receiptPath,
+  });
+  if ("error" in result) return { error: result.error };
+
+  revalidatePath(`/app/${tenantSlug}`);
+  revalidatePath(`/app/${tenantSlug}/pagos`);
+  revalidatePath(`/app/${tenantSlug}/suscriptores`);
+  return {
+    error: null,
+    success: "Comprobante enviado. El comercio va a confirmar el pago.",
+  };
+}
 
 function parseFieldChoices(raw: FormDataEntryValue | null) {
   if (!raw || typeof raw !== "string" || raw.trim() === "") {

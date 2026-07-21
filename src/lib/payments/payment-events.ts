@@ -47,7 +47,8 @@ export async function recordPaymentEvent(
       amount_cents: Math.max(0, Math.round(input.amountCents)),
       billing_cycle_days: normalizeBillingCycleDays(input.billingCycleDays),
       due_on: input.dueOn ?? null,
-      paid_at: input.paidAt ?? new Date().toISOString(),
+      paid_at:
+        input.paidAt === undefined ? new Date().toISOString() : input.paidAt,
       payment_reference: input.paymentReference ?? null,
       payment_receipt_path: input.paymentReceiptPath ?? null,
       external_id: input.externalId ?? null,
