@@ -34,7 +34,6 @@ import {
   normalizeLocalArgentinePhone,
   phoneValidationMessage,
 } from "@/lib/subscribers/contact-validation";
-import { normalizeBillingCycleDays } from "@/lib/subscribers/billing-cycle";
 import { PostalCodeField } from "@/components/subscribers/postal-code-field";
 import { ProvinceLocalityFields } from "@/components/subscribers/province-locality-fields";
 
@@ -166,7 +165,6 @@ export function ManageSubscriptionForm({
   paymentOptions,
   actingAsUserId,
   initialContact,
-  initialBillingCycleDays = 30,
 }: {
   tenantSlug: string;
   plans: PublicPlan[];
@@ -201,9 +199,8 @@ export function ManageSubscriptionForm({
     {},
   );
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | "">("");
-  const [billingCycleDays, setBillingCycleDays] = useState<BillingCycleDays>(
-    normalizeBillingCycleDays(initialBillingCycleDays),
-  );
+  const [billingCycleDays, setBillingCycleDays] =
+    useState<BillingCycleDays>(30);
   const [paymentReference, setPaymentReference] = useState("");
   const [paymentReceiptFile, setPaymentReceiptFile] = useState<File | null>(
     null,
