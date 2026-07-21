@@ -1,12 +1,13 @@
 @import "tailwindcss";
 
 :root {
+  /* Aligned with oricafe.com.ar: white + gray-900 + Tailwind blue-600 */
   --background: #ffffff;
   --foreground: #111827;
   --muted: #4b5563;
   --border: #e5e7eb;
   --card: #f9fafb;
-  --accent: #111827;
+  --accent: #2563eb;
   --accent-foreground: #ffffff;
 }
 
@@ -26,6 +27,15 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-inter), system-ui, sans-serif;
+}
+
+@keyframes ori-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
 }
 
 @layer components {
@@ -58,11 +68,11 @@ body {
   }
 
   .ori-title {
-    @apply text-3xl font-bold tracking-tight text-gray-900;
+    @apply text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl;
   }
 
   .ori-subtitle {
-    @apply text-gray-600;
+    @apply text-base text-gray-600;
   }
 
   .ori-link {
@@ -70,7 +80,7 @@ body {
   }
 
   .ori-nav-link {
-    @apply text-xs font-medium uppercase tracking-widest text-gray-900 transition hover:text-gray-600;
+    @apply text-sm font-medium text-gray-700 transition hover:text-gray-900;
   }
 
   .ori-shell {
@@ -78,10 +88,40 @@ body {
   }
 
   .ori-header {
-    @apply border-b border-gray-200 bg-white/95 backdrop-blur-sm;
+    @apply border-b border-gray-100 bg-white/95 backdrop-blur-sm;
   }
 
   .ori-form-shell {
     @apply w-full max-w-md rounded-2xl border border-gray-200 bg-white p-8 shadow-sm;
+  }
+
+  /* Same pattern as Orí Cafe: fixed blue-600 marquee */
+  .ori-announce {
+    @apply fixed top-0 z-50 h-8 w-full overflow-hidden bg-blue-600 text-white;
+  }
+
+  .ori-announce-track {
+    @apply flex w-max animate-[ori-scroll_28s_linear_infinite] whitespace-nowrap text-xs font-medium tracking-wide;
+  }
+
+  .ori-announce-track span {
+    @apply px-8 py-2;
+  }
+
+  .ori-portal {
+    @apply min-h-full bg-white pt-8 text-gray-900;
+  }
+
+  /* Same horizontal grid for header + pages */
+  .ori-container {
+    @apply mx-auto w-full max-w-7xl px-6 sm:px-8 lg:px-12;
+  }
+
+  .ori-product-card {
+    @apply flex cursor-pointer flex-col rounded-2xl border border-gray-200 bg-white p-5 text-left transition hover:border-gray-300 hover:shadow-sm;
+  }
+
+  .ori-product-card-selected {
+    @apply border-gray-900 bg-gray-50;
   }
 }

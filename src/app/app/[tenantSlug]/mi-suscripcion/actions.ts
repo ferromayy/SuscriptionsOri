@@ -18,11 +18,10 @@ import {
   isMpTestPayerEmail,
 } from "@/lib/mercadopago/subscriptions";
 import { getTenantMpConnection } from "@/lib/mercadopago/oauth";
-import {
-  checkoutDetailsSchema,
-  type CheckoutDetailsInput,
-} from "@/lib/subscribers/checkout-schemas";
+import type { CheckoutDetailsInput } from "@/lib/subscribers/checkout-schemas";
+import { billingCycleDaysSchema } from "@/lib/subscribers/checkout-schemas";
 import { upsertSubscriberSubscription } from "@/lib/subscribers/join-subscriber";
+import { resolveCheckoutFromFormData } from "@/lib/subscribers/resolve-checkout";
 import { getTenantBySlug } from "@/lib/tenants/get-tenant-by-slug";
 
 export type SubscriptionActionState = {
@@ -43,29 +42,6 @@ function parseFieldChoices(raw: FormDataEntryValue | null) {
     return z.array(fieldChoiceSchema).parse(parsed);
   } catch {
     return null;
-  }
-}
-
-function parseCheckout(
-  raw: FormDataEntryValue | null,
-): { error: string } | { data: CheckoutDetailsInput | null } {
-  if (!raw || typeof raw !== "string" || raw.trim() === "") {
-    return { data: null };
-  }
-
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    const result = checkoutDetailsSchema.safeParse(parsed);
-    if (!result.success) {
-      return {
-        error:
-          result.error.issues[0]?.message ??
-          "Completá contacto, entrega y pago",
-      };
-    }
-    return { data: result.data };
-  } catch {
-    return { error: "No se pudieron leer los datos de checkout" };
   }
 }
 
@@ -101,11 +77,6 @@ export async function subscribeLoggedInSubscriber(
     return { error: "Las opciones elegidas no son válidas" };
   }
 
-  const checkoutParsed = parseCheckout(formData.get("checkout"));
-  if ("error" in checkoutParsed) {
-    return { error: checkoutParsed.error };
-  }
-
   const tenantSlug = String(formData.get("tenantSlug") ?? "");
   const planId = String(formData.get("planId") ?? "");
   const requireCheckout = formData.get("requireCheckout") === "1";
@@ -114,13 +85,21 @@ export async function subscribeLoggedInSubscriber(
     return { error: "Elegí una suscripción" };
   }
 
-  if (requireCheckout && !checkoutParsed.data) {
-    return { error: "Completá contacto, entrega y pago" };
-  }
-
   const tenant = await getTenantBySlug(tenantSlug);
   if (!tenant || tenant.status !== "active") {
     return { error: "Organización no disponible" };
+  }
+
+  let checkout: CheckoutDetailsInput | null = null;
+  if (requireCheckout) {
+    const checkoutParsed = await resolveCheckoutFromFormData(
+      formData,
+      tenant.id,
+    );
+    if ("error" in checkoutParsed) {
+      return { error: checkoutParsed.error };
+    }
+    checkout = checkoutParsed.data;
   }
 
   const plans = await getActivePlansForTenant(tenant.id);
@@ -142,13 +121,20 @@ export async function subscribeLoggedInSubscriber(
     return { error: subscriptionValidation.error };
   }
 
+  const cycleParsed = billingCycleDaysSchema.safeParse(
+    Number(formData.get("billingCycleDays")),
+  );
+
   const result = await upsertSubscriberSubscription(
     user.id,
     tenant.id,
     tenant.slug,
     planId,
     fieldChoices,
-    checkoutParsed.data,
+    checkout,
+    cycleParsed.success
+      ? { billingCycleDays: cycleParsed.data }
+      : undefined,
   );
 
   if ("error" in result) {

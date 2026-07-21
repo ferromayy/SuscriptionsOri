@@ -13,26 +13,51 @@ export async function resolvePostLoginRedirect(
   }
 
   const db = createDbClient();
-  const { data: memberships } = await db.from("tenant_members").select("role, tenant_id")
+  const { data: memberships } = await db
+    .from("tenant_members")
+    .select("role, tenant_id")
     .eq("user_id", userId)
-    .eq("status", "active");
+    .eq("status", "active")
+    .is("deleted_at", null);
 
-  if (!memberships?.length) {
-    return "/";
+  if (memberships?.length) {
+    const preferred =
+      memberships.find((membership) =>
+        isTenantManager(membership.role as TenantMemberRole),
+      ) ?? memberships[0];
+
+    const { data: tenant } = await db
+      .from("tenants")
+      .select("slug")
+      .eq("id", preferred.tenant_id)
+      .maybeSingle();
+
+    if (tenant) {
+      return `/app/${tenant.slug}`;
+    }
   }
 
-  const preferred =
-    memberships.find((membership) =>
-      isTenantManager(membership.role as TenantMemberRole),
-    ) ?? memberships[0];
-
-  const { data: tenant } = await db.from("tenants").select("slug")
-    .eq("id", preferred.tenant_id)
+  // First payment not confirmed yet — account exists but not registered as subscriber.
+  const { data: pendingSub } = await db
+    .from("subscriptions")
+    .select("tenant_id")
+    .eq("user_id", userId)
+    .in("status", ["pending_payment", "pending_authorization"])
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
     .maybeSingle();
 
-  if (!tenant) {
-    return "/";
+  if (pendingSub) {
+    const { data: tenant } = await db
+      .from("tenants")
+      .select("slug")
+      .eq("id", pendingSub.tenant_id)
+      .maybeSingle();
+    if (tenant) {
+      return `/app/${tenant.slug}/pendiente`;
+    }
   }
 
-  return `/app/${tenant.slug}`;
+  return "/";
 }

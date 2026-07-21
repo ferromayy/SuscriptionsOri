@@ -21,7 +21,7 @@ export default async function TenantPortalLayout({
   }
 
   return (
-    <div className="min-h-full bg-white text-gray-900">
+    <div className="ori-portal">
       <TenantNav
         tenantSlug={tenantSlug}
         tenantName={tenant?.name ?? tenantSlug}

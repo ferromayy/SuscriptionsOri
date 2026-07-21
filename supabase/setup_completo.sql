@@ -210,6 +210,7 @@ create table public.subscriptions (
     ),
   delivery_details jsonb not null default '{}'::jsonb,
   payment_reference text,
+  payment_receipt_path text,
   payment_method text
     check (
       payment_method is null
@@ -219,6 +220,11 @@ create table public.subscriptions (
     check (
       billing_interval is null
       or billing_interval in ('month', 'year')
+    ),
+  billing_cycle_days integer
+    check (
+      billing_cycle_days is null
+      or billing_cycle_days in (15, 30, 45)
     ),
   mp_preapproval_id text,
   mp_init_point text,
@@ -259,6 +265,59 @@ create index tenant_mp_connections_deleted_at_idx
   on public.tenant_mp_connections (deleted_at);
 create index subscriptions_mp_preapproval_id_idx
   on public.subscriptions (mp_preapproval_id);
+
+create table public.payment_events (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references public.tenants (id),
+  subscription_id uuid not null references public.subscriptions (id),
+  user_id uuid not null references public.users (id),
+  source text not null
+    check (source in ('transfer', 'card', 'manual')),
+  kind text not null
+    check (kind in ('submitted', 'confirmed', 'charged', 'rejected', 'cancelled')),
+  amount_cents integer not null check (amount_cents >= 0),
+  billing_cycle_days integer
+    check (
+      billing_cycle_days is null
+      or billing_cycle_days in (15, 30, 45)
+    ),
+  due_on date,
+  paid_at timestamptz,
+  payment_reference text,
+  payment_receipt_path text,
+  external_id text,
+  notes text,
+  created_at timestamptz not null default now()
+);
+
+create index payment_events_tenant_paid_idx
+  on public.payment_events (tenant_id, paid_at desc nulls last, created_at desc);
+create index payment_events_user_paid_idx
+  on public.payment_events (user_id, paid_at desc nulls last, created_at desc);
+create index payment_events_subscription_idx
+  on public.payment_events (subscription_id, created_at desc);
+
+create table public.delivery_fulfillments (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references public.tenants (id),
+  subscription_id uuid not null references public.subscriptions (id),
+  user_id uuid not null references public.users (id),
+  due_on date not null,
+  status text not null
+    check (status in ('ready', 'shipped')),
+  ready_at timestamptz,
+  shipped_at timestamptz,
+  shipped_email_sent_at timestamptz,
+  notes text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (subscription_id, due_on)
+);
+
+create index delivery_fulfillments_tenant_due_idx
+  on public.delivery_fulfillments (tenant_id, due_on);
+create index delivery_fulfillments_subscription_idx
+  on public.delivery_fulfillments (subscription_id);
 
 create table public.subscription_choices (
   id uuid primary key default gen_random_uuid(),
@@ -328,3 +387,5 @@ alter table public.plan_field_options disable row level security;
 alter table public.subscriptions disable row level security;
 alter table public.subscription_choices disable row level security;
 alter table public.tenant_mp_connections disable row level security;
+alter table public.payment_events disable row level security;
+alter table public.delivery_fulfillments disable row level security;

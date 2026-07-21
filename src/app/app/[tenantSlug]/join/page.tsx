@@ -24,35 +24,41 @@ export default async function TenantJoinPage({
   if (!tenant) {
     return (
       <JoinShell>
-        <h1 className="text-2xl font-semibold">Organización no encontrada</h1>
-        <p className="mt-2 text-gray-600">
-          El link no es válido. Verificá la URL con quien te invitó.
-        </p>
-        <Link href="/" className="mt-6 inline-block text-sm text-gray-600">
-          ← Inicio
-        </Link>
+        <div className="mx-auto max-w-md text-center">
+          <h1 className="ori-title">Organización no encontrada</h1>
+          <p className="ori-subtitle mt-4">
+            El link no es válido. Verificá la URL con quien te invitó.
+          </p>
+          <Link href="/" className="mt-6 inline-block text-sm text-gray-600">
+            ← Inicio
+          </Link>
+        </div>
       </JoinShell>
     );
   }
 
   if (tenant.status !== "active") {
     return (
-      <JoinShell tenantName={tenant.name}>
-        <h1 className="text-2xl font-semibold">{tenant.name}</h1>
-        <p className="mt-2 text-gray-600">
-          Esta organización aún no está activa. Volvé a intentar más tarde.
-        </p>
+      <JoinShell>
+        <div className="mx-auto max-w-md text-center">
+          <h1 className="ori-title">{tenant.name}</h1>
+          <p className="ori-subtitle mt-4">
+            Esta organización aún no está activa. Volvé a intentar más tarde.
+          </p>
+        </div>
       </JoinShell>
     );
   }
 
   if (!tenant.allowPublicSignup) {
     return (
-      <JoinShell tenantName={tenant.name}>
-        <h1 className="text-2xl font-semibold">{tenant.name}</h1>
-        <p className="mt-2 text-gray-600">
-          El registro público está deshabilitado para esta organización.
-        </p>
+      <JoinShell>
+        <div className="mx-auto max-w-md text-center">
+          <h1 className="ori-title">{tenant.name}</h1>
+          <p className="ori-subtitle mt-4">
+            El registro público está deshabilitado para esta organización.
+          </p>
+        </div>
       </JoinShell>
     );
   }
@@ -62,12 +68,21 @@ export default async function TenantJoinPage({
     if (role === "subscriber") {
       redirect(`/app/${tenant.slug}`);
     }
+    if (!isTenantManager(role)) {
+      const { userHasPendingSubscription } = await import(
+        "@/lib/subscribers/ensure-subscriber-membership"
+      );
+      if (await userHasPendingSubscription(currentUser.id, tenant.id)) {
+        redirect(`/app/${tenant.slug}/pendiente`);
+      }
+    }
   }
 
   const plans = await getActivePlansForTenant(tenant.id);
   const mpConnection = await getTenantMpConnection(tenant.id);
   const paymentOptions = {
-    cardsEnabled: Boolean(mpConnection),
+    // Mercado Pago card checkout temporarily disabled — transfer only.
+    cardsEnabled: false,
     transferEnabled: Boolean(
       mpConnection?.transferAlias || mpConnection?.transferCbu,
     ),
@@ -78,12 +93,14 @@ export default async function TenantJoinPage({
 
   if (plans.length === 0) {
     return (
-      <JoinShell tenantName={tenant.name}>
-        <h1 className="text-2xl font-semibold">{tenant.name}</h1>
-        <p className="mt-2 text-gray-600">
-          Todavía no hay suscripciones disponibles. Pedile al administrador que
-          configure una en el panel.
-        </p>
+      <JoinShell>
+        <div className="mx-auto max-w-md text-center">
+          <h1 className="ori-title">{tenant.name}</h1>
+          <p className="ori-subtitle mt-4">
+            Todavía no hay suscripciones disponibles. Pedile al administrador
+            que configure una en el panel.
+          </p>
+        </div>
       </JoinShell>
     );
   }
@@ -96,9 +113,9 @@ export default async function TenantJoinPage({
   }
 
   return (
-    <JoinShell tenantName={tenant.name}>
+    <JoinShell>
       {isPreview && (
-        <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+        <div className="mb-8 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
           <p className="font-medium">Vista previa del formulario público</p>
           <p className="mt-1 text-blue-800">
             Así lo ven tus suscriptos cuando abren el link público.
@@ -112,56 +129,48 @@ export default async function TenantJoinPage({
         </div>
       )}
       {loggedInAsManager && !isPreview && (
-        <div className="mb-6 rounded-lg border border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-800">
+        <div className="mb-8 rounded-lg border border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-800">
           <p>
             Estás logueado como administrador ({currentUser!.email}). Podés
             registrarte como suscriptor abajo con <strong>otro email</strong>.
           </p>
         </div>
       )}
-      <p className="text-sm font-medium uppercase tracking-widest text-gray-900">
-        Crear cuenta
-      </p>
-      <h1 className="mt-2 text-2xl font-semibold">Unite a {tenant.name}</h1>
-      <p className="mt-4 text-gray-600">
-        Elegí una suscripción y completá contacto, entrega y pago para crear tu
-        cuenta.
-      </p>
-      <JoinForm
-        tenantSlug={tenant.slug}
-        plans={plans}
-        paymentOptions={paymentOptions}
-      />
-      <p className="mt-6 text-center text-sm text-gray-500">
-        ¿Ya tenés cuenta?{" "}
-        <Link
-          href={`/auth/login?next=/app/${tenant.slug}/join`}
-          className="text-gray-700 hover:text-gray-600"
-        >
-          Iniciar sesión
-        </Link>
-      </p>
+
+      <div className="mx-auto max-w-2xl text-center">
+        <h1 className="ori-title">
+          Encontrá la suscripción que mejor va con vos
+        </h1>
+        <p className="ori-subtitle mx-auto mt-4 max-w-xl">
+          Unite a {tenant.name}. Elegí tu plan, frecuencia y entrega — con
+          trazabilidad y cuidado en cada envío.
+        </p>
+      </div>
+
+      <div className="mx-auto mt-10 w-full max-w-xl">
+        <JoinForm
+          tenantSlug={tenant.slug}
+          plans={plans}
+          paymentOptions={paymentOptions}
+        />
+        <p className="mt-6 text-center text-sm text-gray-500">
+          ¿Ya tenés cuenta?{" "}
+          <Link
+            href={`/auth/login?next=/app/${tenant.slug}/join`}
+            className="text-gray-700 hover:text-gray-600"
+          >
+            Iniciar sesión
+          </Link>
+        </p>
+      </div>
     </JoinShell>
   );
 }
 
-function JoinShell({
-  children,
-  tenantName,
-}: {
-  children: React.ReactNode;
-  tenantName?: string;
-}) {
+function JoinShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-[calc(100vh-4.5rem)] items-center justify-center px-6 py-16">
-      <div className="w-full ori-form-shell">
-        {tenantName && (
-          <p className="mb-4 text-xs uppercase tracking-widest text-gray-500">
-            {tenantName}
-          </p>
-        )}
-        {children}
-      </div>
+    <div className="ori-container py-12 sm:py-16">
+      {children}
     </div>
   );
 }

@@ -2,11 +2,14 @@ import Link from "next/link";
 
 import { ConnectMercadoPagoButton } from "@/components/payments/connect-mercadopago-button";
 import { DisconnectMercadoPagoButton } from "@/components/payments/disconnect-mercadopago-button";
+import { PaymentHistoryList } from "@/components/payments/payment-history-list";
 import { TransferDetailsForm } from "@/components/payments/transfer-details-form";
+import { isTenantManager } from "@/lib/auth/permissions";
 import { createDbClient } from "@/lib/db/client";
 import { isMercadoPagoConfigured } from "@/lib/mercadopago/env";
 import { getTenantMpConnection } from "@/lib/mercadopago/oauth";
 import { fetchPreapproval } from "@/lib/mercadopago/subscriptions";
+import { listPaymentEvents } from "@/lib/payments/payment-events";
 import { requireTenantAccess } from "@/lib/tenants/require-tenant-access";
 
 export default async function TenantPaymentsPage({
@@ -18,10 +21,43 @@ export default async function TenantPaymentsPage({
 }) {
   const { tenantSlug } = await params;
   const { connected, error } = await searchParams;
-  const { tenant } = await requireTenantAccess(tenantSlug, {
+  const { user, tenant, role } = await requireTenantAccess(tenantSlug, {
     nextPath: `/app/${tenantSlug}/pagos`,
-    requireManager: true,
   });
+
+  const manager = isTenantManager(role);
+  const paymentEvents = await listPaymentEvents({
+    tenantId: tenant.id,
+    userId: manager ? undefined : user.id,
+    limit: manager ? 200 : 50,
+  });
+
+  if (!manager) {
+    return (
+      <div className="ori-container py-16">
+        <p className="ori-eyebrow">{tenant.name}</p>
+        <h1 className="ori-title mt-2">Pagos</h1>
+        <p className="ori-subtitle mt-4">
+          Historial de tus pagos, con fecha y día de cobro de cada ciclo.
+        </p>
+
+        <section className="mt-8 ori-card space-y-4">
+          <h2 className="text-lg font-medium text-gray-900">
+            Registro de pagos
+          </h2>
+          <PaymentHistoryList
+            events={paymentEvents}
+            tenantSlug={tenant.slug}
+            emptyMessage="Todavía no registramos pagos para tu suscripción."
+          />
+        </section>
+
+        <Link href={`/app/${tenant.slug}`} className="mt-8 inline-block text-sm text-gray-600 hover:text-gray-900">
+          ← Volver al panel
+        </Link>
+      </div>
+    );
+  }
 
   const configured = isMercadoPagoConfigured();
   const connection = await getTenantMpConnection(tenant.id);
@@ -48,12 +84,11 @@ export default async function TenantPaymentsPage({
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-16">
+    <div className="ori-container py-16">
       <p className="ori-eyebrow">{tenant.name}</p>
       <h1 className="ori-title mt-2">Pagos</h1>
       <p className="ori-subtitle mt-4">
-        Conectá tu cuenta de Mercado Pago para cobrar suscripciones mensuales y
-        anuales con tarjeta. No necesitás saber de código.
+        Registro de cobros y configuración de Mercado Pago o transferencia.
       </p>
 
       {connected === "1" && (
@@ -70,6 +105,21 @@ export default async function TenantPaymentsPage({
               : "No se pudo completar la conexión. Intentá otra vez."}
         </p>
       )}
+
+      <section className="mt-8 ori-card space-y-4">
+        <h2 className="text-lg font-medium text-gray-900">
+          Registro de pagos
+        </h2>
+        <p className="text-sm text-gray-600">
+          Todos los pagos confirmados, con fecha de pago y día de cobro del
+          ciclo.
+        </p>
+        <PaymentHistoryList
+          events={paymentEvents}
+          tenantSlug={tenant.slug}
+          showSubscriber
+        />
+      </section>
 
       <section className="mt-8 ori-card space-y-4">
         <h2 className="text-lg font-medium text-gray-900">
@@ -117,9 +167,10 @@ export default async function TenantPaymentsPage({
               <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
                 Para suscripciones, Mercado Pago recomienda{" "}
                 <span className="font-medium">MP_USE_TEST_TOKEN=false</span> y
-                conectar Pagos con el <span className="font-medium">vendedor
-                de prueba</span>. Con test_token el botón Confirmar del checkout
-                suele quedar bloqueado.
+                conectar Pagos con el{" "}
+                <span className="font-medium">vendedor de prueba</span>. Con
+                test_token el botón Confirmar del checkout suele quedar
+                bloqueado.
               </p>
             )}
             {!useTestToken && connection && !connection.liveMode && (

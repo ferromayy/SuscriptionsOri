@@ -34,9 +34,22 @@ export type PaymentMethod = "card_monthly" | "card_annual" | "transfer";
 
 export type BillingInterval = "month" | "year";
 
+export type BillingCycleDays = 15 | 30 | 45;
+
 export type MpConnectionStatus = "connected" | "disconnected" | "error";
 
 export type PaymentStatus = "pending" | "authorized" | "paused" | "cancelled";
+
+export type PaymentEventSource = "transfer" | "card" | "manual";
+
+export type PaymentEventKind =
+  | "submitted"
+  | "confirmed"
+  | "charged"
+  | "rejected"
+  | "cancelled";
+
+export type DeliveryFulfillmentStatus = "ready" | "shipped";
 
 export interface Database {
   public: {
@@ -398,8 +411,10 @@ export interface Database {
           delivery_method: DeliveryMethod | null;
           delivery_details: Json;
           payment_reference: string | null;
+          payment_receipt_path: string | null;
           payment_method: PaymentMethod | null;
           billing_interval: BillingInterval | null;
+          billing_cycle_days: BillingCycleDays | null;
           mp_preapproval_id: string | null;
           mp_init_point: string | null;
           payment_status: PaymentStatus | null;
@@ -423,8 +438,10 @@ export interface Database {
           delivery_method?: DeliveryMethod | null;
           delivery_details?: Json;
           payment_reference?: string | null;
+          payment_receipt_path?: string | null;
           payment_method?: PaymentMethod | null;
           billing_interval?: BillingInterval | null;
+          billing_cycle_days?: BillingCycleDays | null;
           mp_preapproval_id?: string | null;
           mp_init_point?: string | null;
           payment_status?: PaymentStatus | null;
@@ -448,8 +465,10 @@ export interface Database {
           delivery_method?: DeliveryMethod | null;
           delivery_details?: Json;
           payment_reference?: string | null;
+          payment_receipt_path?: string | null;
           payment_method?: PaymentMethod | null;
           billing_interval?: BillingInterval | null;
+          billing_cycle_days?: BillingCycleDays | null;
           mp_preapproval_id?: string | null;
           mp_init_point?: string | null;
           payment_status?: PaymentStatus | null;
@@ -539,6 +558,105 @@ export interface Database {
           text_value?: string | null;
           created_at?: string;
           deleted_at?: string | null;
+        };
+        Relationships: [];
+      };
+      payment_events: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          subscription_id: string;
+          user_id: string;
+          source: PaymentEventSource;
+          kind: PaymentEventKind;
+          amount_cents: number;
+          billing_cycle_days: number | null;
+          due_on: string | null;
+          paid_at: string | null;
+          payment_reference: string | null;
+          payment_receipt_path: string | null;
+          external_id: string | null;
+          notes: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id: string;
+          subscription_id: string;
+          user_id: string;
+          source: PaymentEventSource;
+          kind: PaymentEventKind;
+          amount_cents: number;
+          billing_cycle_days?: number | null;
+          due_on?: string | null;
+          paid_at?: string | null;
+          payment_reference?: string | null;
+          payment_receipt_path?: string | null;
+          external_id?: string | null;
+          notes?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          tenant_id?: string;
+          subscription_id?: string;
+          user_id?: string;
+          source?: PaymentEventSource;
+          kind?: PaymentEventKind;
+          amount_cents?: number;
+          billing_cycle_days?: number | null;
+          due_on?: string | null;
+          paid_at?: string | null;
+          payment_reference?: string | null;
+          payment_receipt_path?: string | null;
+          external_id?: string | null;
+          notes?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      delivery_fulfillments: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          subscription_id: string;
+          user_id: string;
+          due_on: string;
+          status: DeliveryFulfillmentStatus;
+          ready_at: string | null;
+          shipped_at: string | null;
+          shipped_email_sent_at: string | null;
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          tenant_id: string;
+          subscription_id: string;
+          user_id: string;
+          due_on: string;
+          status: DeliveryFulfillmentStatus;
+          ready_at?: string | null;
+          shipped_at?: string | null;
+          shipped_email_sent_at?: string | null;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          tenant_id?: string;
+          subscription_id?: string;
+          user_id?: string;
+          due_on?: string;
+          status?: DeliveryFulfillmentStatus;
+          ready_at?: string | null;
+          shipped_at?: string | null;
+          shipped_email_sent_at?: string | null;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
         };
         Relationships: [];
       };

@@ -27,12 +27,10 @@ import { getActivePlansForTenant } from "@/lib/plans/get-plans";
 import { loadResolvedPlan } from "@/lib/plans/load-resolved-plan";
 import { validateFieldChoices } from "@/lib/plans/pricing-utils";
 import { fieldChoiceSchema, type FieldChoiceInput } from "@/lib/plans/schemas";
-import {
-  checkoutDetailsSchema,
-  type CheckoutDetailsInput,
-} from "@/lib/subscribers/checkout-schemas";
+import type { CheckoutDetailsInput } from "@/lib/subscribers/checkout-schemas";
 import { setPendingPublicSignup } from "@/lib/subscribers/pending-signup-cookie";
 import { completePublicSignup } from "@/lib/subscribers/join-subscriber";
+import { resolveCheckoutFromFormData } from "@/lib/subscribers/resolve-checkout";
 import { getTenantBySlug } from "@/lib/tenants/get-tenant-by-slug";
 
 export type JoinActionState = {
@@ -49,23 +47,6 @@ function parseFieldChoices(raw: FormDataEntryValue | null) {
     return z.array(fieldChoiceSchema).parse(parsed);
   } catch {
     return null;
-  }
-}
-
-function parseCheckout(raw: FormDataEntryValue | null) {
-  if (!raw || typeof raw !== "string") {
-    return null;
-  }
-
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    const result = checkoutDetailsSchema.safeParse(parsed);
-    if (!result.success) {
-      return { error: result.error.issues[0]?.message ?? "Datos de checkout inválidos" };
-    }
-    return { data: result.data };
-  } catch {
-    return { error: "No se pudieron leer los datos de contacto y entrega" };
   }
 }
 
@@ -187,12 +168,6 @@ export async function signUpAsSubscriber(
     return { error: "Las opciones elegidas no son válidas" };
   }
 
-  const checkoutParsed = parseCheckout(formData.get("checkout"));
-  if (!checkoutParsed || "error" in checkoutParsed) {
-    return { error: checkoutParsed?.error ?? "Completá contacto, entrega y pago" };
-  }
-  const checkout = checkoutParsed.data;
-
   const parsed = signUpSchema.safeParse({
     tenantSlug: formData.get("tenantSlug"),
     planId: formData.get("planId"),
@@ -206,13 +181,23 @@ export async function signUpAsSubscriber(
   }
 
   const { tenantSlug, planId, password } = parsed.data;
-  const email = checkout.email;
-  const fullName = fullNameFromCheckout(checkout);
   const context = await validateJoinContext(tenantSlug, planId);
 
   if ("error" in context) {
     return { error: context.error };
   }
+
+  const checkoutParsed = await resolveCheckoutFromFormData(
+    formData,
+    context.tenantId,
+  );
+  if ("error" in checkoutParsed) {
+    return { error: checkoutParsed.error };
+  }
+  const checkout = checkoutParsed.data;
+
+  const email = checkout.email;
+  const fullName = fullNameFromCheckout(checkout);
 
   const subscriptionValidation = await validateSubscriptionSelection(
     context.tenantId,
@@ -289,15 +274,26 @@ export async function signInAndJoinAsSubscriber(
     return { error: "Las opciones elegidas no son válidas" };
   }
 
-  const checkoutParsed = parseCheckout(formData.get("checkout"));
-  if (!checkoutParsed || "error" in checkoutParsed) {
-    return { error: checkoutParsed?.error ?? "Completá contacto, entrega y pago" };
+  const tenantSlug = String(formData.get("tenantSlug") ?? "");
+  const planId = String(formData.get("planId") ?? "");
+  const context = await validateJoinContext(tenantSlug, planId);
+
+  if ("error" in context) {
+    return { error: context.error };
+  }
+
+  const checkoutParsed = await resolveCheckoutFromFormData(
+    formData,
+    context.tenantId,
+  );
+  if ("error" in checkoutParsed) {
+    return { error: checkoutParsed.error };
   }
   const checkout = checkoutParsed.data;
 
   const parsed = signInSchema.safeParse({
-    tenantSlug: formData.get("tenantSlug"),
-    planId: formData.get("planId"),
+    tenantSlug,
+    planId,
     email: formData.get("email") || checkout.email,
     password: formData.get("password"),
   });
@@ -308,12 +304,7 @@ export async function signInAndJoinAsSubscriber(
     };
   }
 
-  const { tenantSlug, planId, email, password } = parsed.data;
-  const context = await validateJoinContext(tenantSlug, planId);
-
-  if ("error" in context) {
-    return { error: context.error };
-  }
+  const { email, password } = parsed.data;
 
   const subscriptionValidation = await validateSubscriptionSelection(
     context.tenantId,

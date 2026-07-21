@@ -47,7 +47,7 @@ async function syncPreapprovalById(preapprovalId: string): Promise<void> {
   const db = createDbClient();
   const { data: subscription } = await db
     .from("subscriptions")
-    .select("id, tenant_id, mp_preapproval_id, status")
+    .select("id, tenant_id, user_id, mp_preapproval_id, status")
     .eq("mp_preapproval_id", preapprovalId)
     .is("deleted_at", null)
     .maybeSingle();
@@ -130,8 +130,6 @@ async function syncPreapprovalById(preapprovalId: string): Promise<void> {
       error: updateError.message,
     });
 
-    // If the rejection-detail columns are missing (migration not applied),
-    // still persist the critical status fields.
     if (update.mp_last_rejection_detail) {
       const { error: fallbackError } = await db
         .from("subscriptions")
@@ -144,6 +142,36 @@ async function syncPreapprovalById(preapprovalId: string): Promise<void> {
           error: fallbackError.message,
         });
       }
+    }
+  }
+
+  if (status === "active") {
+    const { ensureSubscriberMembership } = await import(
+      "@/lib/subscribers/ensure-subscriber-membership"
+    );
+    const membership = await ensureSubscriberMembership(
+      subscription.user_id,
+      subscription.tenant_id,
+      "public_signup",
+    );
+    if ("error" in membership) {
+      console.error("[mercadopago] webhook membership failed", {
+        subscriptionId: subscription.id,
+        error: membership.error,
+      });
+    }
+
+    const { recordConfirmedSubscriptionPayment } = await import(
+      "@/lib/payments/payment-events"
+    );
+    const paymentRecord = await recordConfirmedSubscriptionPayment(
+      subscription.id,
+    );
+    if ("error" in paymentRecord) {
+      console.error("[mercadopago] webhook payment ledger failed", {
+        subscriptionId: subscription.id,
+        error: paymentRecord.error,
+      });
     }
   }
 }

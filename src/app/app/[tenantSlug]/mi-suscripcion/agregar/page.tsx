@@ -24,7 +24,7 @@ export default async function AddSubscriptionPage({
         </p>
         <Link
           href={`/app/${tenant.slug}`}
-          className="mt-4 inline-block text-sm text-gray-700 hover:text-gray-900"
+          className="mt-4 inline-block text-sm text-gray-700 underline-offset-4 hover:underline"
         >
           ← Volver al panel
         </Link>
@@ -39,7 +39,8 @@ export default async function AddSubscriptionPage({
   const availablePlans = allPlans.filter((plan) => !ownedPlanIds.has(plan.id));
   const mpConnection = await getTenantMpConnection(tenant.id);
   const paymentOptions = {
-    cardsEnabled: Boolean(mpConnection),
+    // Mercado Pago card checkout temporarily disabled — transfer only.
+    cardsEnabled: false,
     transferEnabled: Boolean(
       mpConnection?.transferAlias || mpConnection?.transferCbu,
     ),
@@ -57,7 +58,7 @@ export default async function AddSubscriptionPage({
       </p>
       <Link
         href={`/app/${tenant.slug}`}
-        className="mt-4 inline-block text-sm text-gray-600 hover:text-gray-900"
+        className="mt-4 inline-block text-sm text-gray-700 underline-offset-4 hover:underline"
       >
         ← Volver a mis suscripciones
       </Link>
@@ -90,7 +91,7 @@ function SubscriberShell({
   tenantName: string;
 }) {
   return (
-    <div className="mx-auto max-w-2xl px-6 py-16">
+    <div className="ori-container py-16">
       <p className="text-xs uppercase tracking-widest text-gray-500">{tenantName}</p>
       {children}
     </div>

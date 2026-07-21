@@ -8,6 +8,10 @@ import {
   type JoinActionState,
 } from "@/app/app/[tenantSlug]/join/actions";
 import {
+  createManagedSubscriberAction,
+  type ManagedSubscriberState,
+} from "@/app/app/[tenantSlug]/suscriptores/actions";
+import {
   calculateLivePlanPrice,
   formatPlanPrice,
 } from "@/lib/plans/format-price";
@@ -18,9 +22,16 @@ import type {
   CheckoutDetailsInput,
   DeliveryMethod,
   PaymentMethod,
+  BillingCycleDays,
 } from "@/lib/subscribers/checkout-schemas";
+import { isValidArgentinePostalCode } from "@/lib/subscribers/argentine-postal-code";
+import { BillingCyclePicker } from "@/components/subscriptions/billing-cycle-picker";
+import { PostalCodeField } from "@/components/subscribers/postal-code-field";
+import { ProvinceLocalityFields } from "@/components/subscribers/province-locality-fields";
+import Link from "next/link";
 
-const initialState: JoinActionState = { error: null };
+const initialJoinState: JoinActionState = { error: null };
+const initialManagedState: ManagedSubscriberState = { error: null };
 
 type AuthMode = "signup" | "login";
 type CheckoutStep = "plan" | "contact" | "delivery" | "payment" | "account";
@@ -93,18 +104,21 @@ function isDeliveryComplete(
   method: DeliveryMethod | "",
   details: Record<string, string>,
 ) {
+  const hasPlace =
+    Boolean(details.province?.trim()) && Boolean(details.locality?.trim());
+
   if (method === "shipping") {
     return Boolean(
-      details.province?.trim() &&
-        details.neighborhood?.trim() &&
-        details.postalCode?.trim() &&
+      hasPlace &&
+        isValidArgentinePostalCode(details.postalCode ?? "") &&
         details.address?.trim(),
     );
   }
 
   if (method === "andreani") {
     return Boolean(
-      details.postalCode?.trim() &&
+      hasPlace &&
+        isValidArgentinePostalCode(details.postalCode ?? "") &&
         details.address?.trim() &&
         details.number?.trim(),
     );
@@ -117,11 +131,15 @@ export function JoinForm({
   tenantSlug,
   plans,
   paymentOptions,
+  variant = "public",
 }: {
   tenantSlug: string;
   plans: PublicPlan[];
   paymentOptions: JoinPaymentOptions;
+  /** Manager panel: same steps, transfer is confirmed immediately. */
+  variant?: "public" | "manager";
 }) {
+  const isManager = variant === "manager";
   const [authMode, setAuthMode] = useState<AuthMode>("signup");
   const [step, setStep] = useState<CheckoutStep>("plan");
   const [selectedPlanId, setSelectedPlanId] = useState("");
@@ -138,16 +156,35 @@ export function JoinForm({
     {},
   );
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | "">("");
+  const [billingCycleDays, setBillingCycleDays] =
+    useState<BillingCycleDays>(30);
   const [paymentReference, setPaymentReference] = useState("");
+  const [paymentReceiptFile, setPaymentReceiptFile] = useState<File | null>(
+    null,
+  );
   const [mpPayerEmail, setMpPayerEmail] = useState("");
   const [signUpState, signUpAction, signUpPending] = useActionState(
     signUpAsSubscriber,
-    initialState,
+    initialJoinState,
   );
   const [signInState, signInAction, signInPending] = useActionState(
     signInAndJoinAsSubscriber,
-    initialState,
+    initialJoinState,
   );
+  const [managedState, managedAction, managedPending] = useActionState(
+    createManagedSubscriberAction,
+    initialManagedState,
+  );
+
+  function attachReceiptAndRun(
+    action: (payload: FormData) => void,
+    formData: FormData,
+  ) {
+    if (paymentReceiptFile) {
+      formData.set("paymentReceipt", paymentReceiptFile);
+    }
+    action(formData);
+  }
 
   const selectedPlan = plans.find((plan) => plan.id === selectedPlanId);
   const fieldChoices = useMemo(
@@ -169,7 +206,10 @@ export function JoinForm({
   const paymentComplete =
     ((paymentMethod === "card_monthly" || paymentMethod === "card_annual") &&
       mpPayerEmail.trim().includes("@")) ||
-    (paymentMethod === "transfer" && paymentReference.trim().length > 0);
+    (paymentMethod === "transfer" &&
+      (isManager ||
+        paymentReference.trim().length > 0 ||
+        paymentReceiptFile !== null));
 
   const checkoutPayload: CheckoutDetailsInput | null =
     deliveryMethod &&
@@ -182,8 +222,11 @@ export function JoinForm({
           lastName: lastName.trim(),
           deliveryMethod,
           deliveryDetails,
+          billingCycleDays,
           paymentMethod,
-          paymentReference: paymentReference.trim() || undefined,
+          paymentReference:
+            paymentReference.trim() ||
+            (isManager ? "Confirmado por el comercio" : undefined),
           mpPayerEmail:
             paymentMethod === "card_monthly" || paymentMethod === "card_annual"
               ? mpPayerEmail.trim()
@@ -191,9 +234,42 @@ export function JoinForm({
         }
       : null;
 
-  const error = authMode === "signup" ? signUpState.error : signInState.error;
-  const pending = authMode === "signup" ? signUpPending : signInPending;
+  const error = isManager
+    ? managedState.error
+    : authMode === "signup"
+      ? signUpState.error
+      : signInState.error;
+  const pending = isManager
+    ? managedPending
+    : authMode === "signup"
+      ? signUpPending
+      : signInPending;
   const planReady = Boolean(selectedPlanId) && fieldsComplete;
+
+  if (isManager && managedState.success && managedState.userId) {
+    return (
+      <div className="mt-8 ori-card space-y-4">
+        <p className="text-sm font-medium text-gray-900">
+          {managedState.success}
+        </p>
+        <p className="text-sm text-gray-600">
+          La transferencia quedó confirmada y la suscripción activa.
+        </p>
+        <Link
+          href={`/app/${tenantSlug}/suscriptores/${managedState.userId}`}
+          className="inline-flex rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white"
+        >
+          Ver ficha del suscriptor
+        </Link>
+        <Link
+          href={`/app/${tenantSlug}/suscriptores`}
+          className="block text-sm text-gray-600 underline-offset-4 hover:underline"
+        >
+          Volver a suscriptores
+        </Link>
+      </div>
+    );
+  }
 
   function handlePlanChange(planId: string) {
     setSelectedPlanId(planId);
@@ -211,8 +287,8 @@ export function JoinForm({
   }
 
   return (
-    <div className="mt-8">
-      <div className="mb-6 flex flex-wrap gap-2 text-xs">
+    <div className="mt-2">
+      <div className="mb-8 flex flex-wrap justify-center gap-2 text-xs sm:justify-start">
         {(
           [
             ["plan", "1. Suscripción"],
@@ -237,48 +313,51 @@ export function JoinForm({
 
       {step === "plan" && (
         <>
-          <fieldset className="space-y-3">
-            <legend className="text-sm text-gray-700">Elegí una suscripción</legend>
-            {plans.map((plan) => (
-              <label
-                key={plan.id}
-                className={`flex cursor-pointer items-start gap-3 rounded-lg border px-4 py-3 ${
-                  selectedPlanId === plan.id
-                    ? "border-gray-900 bg-gray-100"
-                    : "border-gray-200"
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="planChoice"
-                  value={plan.id}
-                  checked={selectedPlanId === plan.id}
-                  onChange={() => handlePlanChange(plan.id)}
-                  className="mt-1"
-                />
-                <span>
-                  <span className="block font-medium text-gray-900">{plan.name}</span>
-                  <span className="block text-sm text-gray-600">
+          <fieldset>
+            <legend className="sr-only">Elegí una suscripción</legend>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {plans.map((plan) => (
+                <label
+                  key={plan.id}
+                  className={`ori-product-card ${
+                    selectedPlanId === plan.id ? "ori-product-card-selected" : ""
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="planChoice"
+                    value={plan.id}
+                    checked={selectedPlanId === plan.id}
+                    onChange={() => handlePlanChange(plan.id)}
+                    className="sr-only"
+                  />
+                  <span className="text-lg font-semibold tracking-tight text-gray-900">
+                    {plan.name}
+                  </span>
+                  <span className="mt-2 block text-base font-medium text-gray-900">
                     {formatPlanPrice(plan)}
                   </span>
                   {plan.description && (
-                    <span className="mt-1 block text-xs text-gray-500">
+                    <span className="mt-2 block text-sm text-gray-500">
                       {plan.description}
                     </span>
                   )}
-                </span>
-              </label>
-            ))}
+                  <span className="mt-4 inline-block text-sm font-medium text-blue-600">
+                    {selectedPlanId === plan.id ? "Seleccionado" : "Ver plan"}
+                  </span>
+                </label>
+              ))}
+            </div>
           </fieldset>
 
           {!selectedPlanId && (
-            <p className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+            <p className="mt-4 text-center text-sm text-gray-500 sm:text-left">
               Elegí una suscripción para continuar.
             </p>
           )}
 
           {selectedPlan && selectedPlan.fields.length > 0 && (
-            <fieldset className="mt-6 space-y-4 rounded-lg border border-gray-200 p-4">
+            <fieldset className="mt-6 space-y-4 rounded-2xl border border-gray-200 bg-white p-4">
               <legend className="px-1 text-sm font-medium text-gray-900">
                 Personalizá tu suscripción
               </legend>
@@ -459,53 +538,83 @@ export function JoinForm({
           </div>
 
           {deliveryMethod === "shipping" && (
-            <div className="space-y-4 rounded-lg border border-gray-200 p-4">
-              <Field
-                label="Provincia"
-                value={deliveryDetails.province ?? ""}
-                onChange={(value) => updateDeliveryDetail("province", value)}
+            <div className="space-y-4">
+              <ProvinceLocalityFields
+                province={deliveryDetails.province ?? ""}
+                locality={deliveryDetails.locality ?? ""}
+                onProvinceChange={(value) =>
+                  updateDeliveryDetail("province", value)
+                }
+                onLocalityChange={(value) =>
+                  updateDeliveryDetail("locality", value)
+                }
               />
-              <Field
-                label="Barrio"
-                value={deliveryDetails.neighborhood ?? ""}
-                onChange={(value) => updateDeliveryDetail("neighborhood", value)}
-              />
-              <Field
-                label="Código postal"
-                value={deliveryDetails.postalCode ?? ""}
-                onChange={(value) => updateDeliveryDetail("postalCode", value)}
-              />
-              <Field
-                label="Dirección"
-                value={deliveryDetails.address ?? ""}
-                onChange={(value) => updateDeliveryDetail("address", value)}
-              />
-              <Field
-                label="Depto"
-                value={deliveryDetails.apartment ?? ""}
-                onChange={(value) => updateDeliveryDetail("apartment", value)}
-                required={false}
-              />
+              <div className="space-y-4 rounded-lg border border-gray-200 p-4">
+                <PostalCodeField
+                  value={deliveryDetails.postalCode ?? ""}
+                  onChange={(value) =>
+                    updateDeliveryDetail("postalCode", value)
+                  }
+                />
+                <Field
+                  label="Dirección"
+                  value={deliveryDetails.address ?? ""}
+                  onChange={(value) => updateDeliveryDetail("address", value)}
+                />
+                <Field
+                  label="Barrio (opcional)"
+                  value={deliveryDetails.neighborhood ?? ""}
+                  onChange={(value) =>
+                    updateDeliveryDetail("neighborhood", value)
+                  }
+                  required={false}
+                />
+                <Field
+                  label="Depto (opcional)"
+                  value={deliveryDetails.apartment ?? ""}
+                  onChange={(value) =>
+                    updateDeliveryDetail("apartment", value)
+                  }
+                  required={false}
+                />
+              </div>
             </div>
           )}
 
           {deliveryMethod === "andreani" && (
-            <div className="space-y-4 rounded-lg border border-gray-200 p-4">
-              <Field
-                label="Código postal (para elegir tu sucursal más cercana)"
-                value={deliveryDetails.postalCode ?? ""}
-                onChange={(value) => updateDeliveryDetail("postalCode", value)}
+            <div className="space-y-4">
+              <ProvinceLocalityFields
+                provinceId="andreani-province"
+                localityId="andreani-locality"
+                province={deliveryDetails.province ?? ""}
+                locality={deliveryDetails.locality ?? ""}
+                onProvinceChange={(value) =>
+                  updateDeliveryDetail("province", value)
+                }
+                onLocalityChange={(value) =>
+                  updateDeliveryDetail("locality", value)
+                }
               />
-              <Field
-                label="Dirección"
-                value={deliveryDetails.address ?? ""}
-                onChange={(value) => updateDeliveryDetail("address", value)}
-              />
-              <Field
-                label="Número"
-                value={deliveryDetails.number ?? ""}
-                onChange={(value) => updateDeliveryDetail("number", value)}
-              />
+              <div className="space-y-4 rounded-lg border border-gray-200 p-4">
+                <PostalCodeField
+                  id="andreani-postal-code"
+                  label="Código postal (para elegir tu sucursal más cercana)"
+                  value={deliveryDetails.postalCode ?? ""}
+                  onChange={(value) =>
+                    updateDeliveryDetail("postalCode", value)
+                  }
+                />
+                <Field
+                  label="Dirección"
+                  value={deliveryDetails.address ?? ""}
+                  onChange={(value) => updateDeliveryDetail("address", value)}
+                />
+                <Field
+                  label="Número"
+                  value={deliveryDetails.number ?? ""}
+                  onChange={(value) => updateDeliveryDetail("number", value)}
+                />
+              </div>
             </div>
           )}
 
@@ -526,17 +635,26 @@ export function JoinForm({
 
       {step === "payment" && (
         <section className="space-y-4">
-          <h2 className="text-lg font-medium text-gray-900">Pago</h2>
+          <h2 className="text-lg font-medium text-gray-900">Pago y frecuencia</h2>
           {selectedPlan && (
             <p className="text-sm text-gray-600">
-              Precio mensual base:{" "}
+              Precio por ciclo:{" "}
               <span className="font-medium text-gray-900">
-                {formatCents(livePrice, selectedPlan.currency, "month")}
+                {formatCents(livePrice, selectedPlan.currency, billingCycleDays)}
               </span>
             </p>
           )}
 
-          {!paymentOptions.cardsEnabled && !paymentOptions.transferEnabled && (
+          <BillingCyclePicker
+            value={billingCycleDays}
+            onChange={setBillingCycleDays}
+            priceCents={livePrice}
+            currency={selectedPlan?.currency}
+          />
+
+          {!isManager &&
+            !paymentOptions.cardsEnabled &&
+            !paymentOptions.transferEnabled && (
             <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
               Este comercio todavía no configuró pagos. Pedile que conecte
               Mercado Pago en su panel.
@@ -569,7 +687,19 @@ export function JoinForm({
                 checked={paymentMethod === "transfer"}
                 onChange={() => setPaymentMethod("transfer")}
                 title="Transferencia"
-                description="Te mostramos CBU/alias para transferir. Queda pendiente de confirmación."
+                description={
+                  isManager
+                    ? "Queda confirmada al instante (activa). Podés cargar número u opcionalmente el comprobante."
+                    : "Te mostramos CBU/alias para transferir. Queda pendiente de confirmación."
+                }
+              />
+            )}
+            {isManager && !paymentOptions.transferEnabled && (
+              <PaymentOption
+                checked={paymentMethod === "transfer"}
+                onChange={() => setPaymentMethod("transfer")}
+                title="Transferencia"
+                description="Se confirma al instante aunque todavía no hayas cargado CBU/alias en Pagos."
               />
             )}
           </div>
@@ -594,21 +724,52 @@ export function JoinForm({
                   {paymentOptions.transferCbu}
                 </p>
               )}
-              <div>
-                <label
-                  htmlFor="paymentReference"
-                  className="block text-sm text-gray-700"
-                >
-                  Referencia / comprobante
-                </label>
-                <input
-                  id="paymentReference"
-                  value={paymentReference}
-                  onChange={(event) => setPaymentReference(event.target.value)}
-                  className="ori-input mt-1"
-                  placeholder="Ej. número de operación"
-                  required
-                />
+              <div className="space-y-3">
+                <div>
+                  <label
+                    htmlFor="paymentReference"
+                    className="block text-sm text-gray-700"
+                  >
+                    Número de operación / transacción
+                    {isManager ? " (opcional)" : ""}
+                  </label>
+                  <input
+                    id="paymentReference"
+                    value={paymentReference}
+                    onChange={(event) => setPaymentReference(event.target.value)}
+                    className="ori-input mt-1"
+                    placeholder="Ej. 123456789"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="paymentReceipt"
+                    className="block text-sm text-gray-700"
+                  >
+                    Comprobante (PDF o imagen)
+                    {isManager ? " (opcional)" : ""}
+                  </label>
+                  <input
+                    id="paymentReceipt"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,application/pdf"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] ?? null;
+                      setPaymentReceiptFile(file);
+                    }}
+                    className="mt-1 block w-full text-sm text-gray-700 file:mr-3 file:rounded-md file:border-0 file:bg-gray-900 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white"
+                  />
+                  {paymentReceiptFile && (
+                    <p className="mt-1 text-xs text-gray-500">
+                      Archivo: {paymentReceiptFile.name}
+                    </p>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500">
+                  {isManager
+                    ? "Al suscribir desde el panel, la transferencia se confirma sola y la suscripción queda activa."
+                    : "Completá al menos uno: número de operación o comprobante. La suscripción queda pendiente hasta que el comercio confirme el pago."}
+                </p>
               </div>
             </div>
           )}
@@ -694,14 +855,23 @@ export function JoinForm({
                   : "text-gray-600 hover:text-gray-800"
               }`}
             >
-              Ya tengo cuenta
+              {isManager ? "Ya tiene cuenta" : "Ya tengo cuenta"}
             </button>
           </div>
 
           {authMode === "signup" ? (
-            <form action={signUpAction} className="mt-6 space-y-4">
+            <form
+              action={(formData) =>
+                attachReceiptAndRun(
+                  isManager ? managedAction : signUpAction,
+                  formData,
+                )
+              }
+              className="mt-6 space-y-4"
+            >
               <input type="hidden" name="tenantSlug" value={tenantSlug} />
               <input type="hidden" name="planId" value={selectedPlanId} />
+              <input type="hidden" name="authMode" value="signup" />
               <input
                 type="hidden"
                 name="fieldChoices"
@@ -725,16 +895,35 @@ export function JoinForm({
                   autoComplete="new-password"
                   className="ori-input mt-1"
                 />
+                {isManager && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    Es la contraseña con la que esa persona va a entrar a su
+                    panel.
+                  </p>
+                )}
               </div>
               <SubmitButton
                 pending={pending}
-                label="Crear cuenta y verificar email"
+                label={
+                  isManager
+                    ? "Suscribir"
+                    : "Crear cuenta y verificar email"
+                }
               />
             </form>
           ) : (
-            <form action={signInAction} className="mt-6 space-y-4">
+            <form
+              action={(formData) =>
+                attachReceiptAndRun(
+                  isManager ? managedAction : signInAction,
+                  formData,
+                )
+              }
+              className="mt-6 space-y-4"
+            >
               <input type="hidden" name="tenantSlug" value={tenantSlug} />
               <input type="hidden" name="planId" value={selectedPlanId} />
+              <input type="hidden" name="authMode" value="login" />
               <input
                 type="hidden"
                 name="fieldChoices"
@@ -746,33 +935,45 @@ export function JoinForm({
                 value={JSON.stringify(checkoutPayload)}
               />
               <input type="hidden" name="email" value={email} />
-              <div>
-                <div className="flex items-center justify-between">
-                  <label
-                    htmlFor="loginPassword"
-                    className="block text-sm text-gray-700"
-                  >
-                    Contraseña
-                  </label>
-                  <a
-                    href={`/auth/forgot-password?next=${encodeURIComponent(`/app/${tenantSlug}`)}`}
-                    className="text-xs text-gray-600 hover:text-gray-900 underline-offset-4 hover:underline"
-                  >
-                    ¿Olvidaste tu contraseña?
-                  </a>
+              {isManager ? (
+                <p className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+                  Se va a suscribir la cuenta con email{" "}
+                  <span className="font-medium text-gray-900">{email}</span>.
+                  No hace falta la contraseña.
+                </p>
+              ) : (
+                <div>
+                  <div className="flex items-center justify-between">
+                    <label
+                      htmlFor="loginPassword"
+                      className="block text-sm text-gray-700"
+                    >
+                      Contraseña
+                    </label>
+                    <a
+                      href={`/auth/forgot-password?next=${encodeURIComponent(`/app/${tenantSlug}`)}`}
+                      className="text-xs text-gray-600 hover:text-gray-900 underline-offset-4 hover:underline"
+                    >
+                      ¿Olvidaste tu contraseña?
+                    </a>
+                  </div>
+                  <input
+                    id="loginPassword"
+                    name="password"
+                    type="password"
+                    required
+                    autoComplete="current-password"
+                    className="ori-input mt-1"
+                  />
                 </div>
-                <input
-                  id="loginPassword"
-                  name="password"
-                  type="password"
-                  required
-                  autoComplete="current-password"
-                  className="ori-input mt-1"
-                />
-              </div>
+              )}
               <SubmitButton
                 pending={pending}
-                label="Iniciar sesión y suscribirme"
+                label={
+                  isManager
+                    ? "Suscribir con cuenta existente"
+                    : "Iniciar sesión y suscribirme"
+                }
               />
             </form>
           )}

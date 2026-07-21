@@ -83,7 +83,9 @@ function checkoutColumns(checkout: CheckoutDetailsInput) {
     ),
     payment_method: checkout.paymentMethod,
     billing_interval: billingIntervalFromPaymentMethod(checkout.paymentMethod),
+    billing_cycle_days: checkout.billingCycleDays,
     payment_reference: checkout.paymentReference?.trim() || null,
+    payment_receipt_path: checkout.paymentReceiptPath?.trim() || null,
   };
 }
 
@@ -98,6 +100,10 @@ export async function upsertSubscriberSubscription(
   planId: string,
   fieldChoices: FieldChoiceInput[],
   checkout?: CheckoutDetailsInput | null,
+  options?: {
+    skipTransferAccountCheck?: boolean;
+    billingCycleDays?: 15 | 30 | 45;
+  },
 ): Promise<UpsertSubscriptionResult> {
   const plan = await loadResolvedPlan(planId, tenantId);
   if (!plan) {
@@ -143,9 +149,18 @@ export async function upsertSubscriberSubscription(
       return choicesResult;
     }
 
+    const updatePayload: {
+      final_price_cents: number;
+      billing_cycle_days?: 15 | 30 | 45;
+    } = { final_price_cents: finalPriceCents };
+
+    if (options?.billingCycleDays) {
+      updatePayload.billing_cycle_days = options.billingCycleDays;
+    }
+
     const { error: updateError } = await db
       .from("subscriptions")
-      .update({ final_price_cents: finalPriceCents })
+      .update(updatePayload)
       .eq("id", existingSub.id);
 
     if (updateError) {
@@ -162,18 +177,25 @@ export async function upsertSubscriberSubscription(
   }
 
   const mpConnection = await getTenantMpConnection(tenantId);
-  if (!mpConnection && parsedCheckout.paymentMethod !== "transfer") {
+  if (
+    parsedCheckout.paymentMethod !== "transfer" &&
+    (parsedCheckout.paymentMethod === "card_monthly" ||
+      parsedCheckout.paymentMethod === "card_annual")
+  ) {
     return {
       error:
-        "Este comercio todavía no conectó Mercado Pago. Probá más tarde o elegí transferencia.",
+        "El pago con tarjeta no está disponible por ahora. Usá transferencia.",
     };
   }
 
-  if (parsedCheckout.paymentMethod === "transfer") {
+  if (
+    parsedCheckout.paymentMethod === "transfer" &&
+    !options?.skipTransferAccountCheck
+  ) {
     if (!mpConnection?.transferAlias && !mpConnection?.transferCbu) {
       return {
         error:
-          "Este comercio todavía no cargó los datos de transferencia. Elegí pago con tarjeta.",
+          "Este comercio todavía no cargó los datos de transferencia. Pedile al administrador que complete CBU/alias en Pagos.",
       };
     }
   }
@@ -343,19 +365,8 @@ export async function completePublicSignup(
     };
   }
 
-  if (!existingMember) {
-    const { error: memberError } = await db.from("tenant_members").insert({
-      tenant_id: tenant.id,
-      user_id: userId,
-      role: "subscriber",
-      joined_via: "public_signup",
-      status: "active",
-    });
-
-    if (memberError) {
-      return { error: memberError.message };
-    }
-  }
+  // Membership is created only after the first payment is confirmed.
+  // Pending transfer / card authorization does not register the subscriber yet.
 
   const subscriptionResult = await upsertSubscriberSubscription(
     userId,
@@ -370,8 +381,34 @@ export async function completePublicSignup(
     return { error: subscriptionResult.error };
   }
 
+  const { data: subscription } = await db
+    .from("subscriptions")
+    .select("status")
+    .eq("id", subscriptionResult.subscriptionId)
+    .maybeSingle();
+
+  if (subscription?.status === "active") {
+    const { ensureSubscriberMembership } = await import(
+      "@/lib/subscribers/ensure-subscriber-membership"
+    );
+    const membership = await ensureSubscriberMembership(
+      userId,
+      tenant.id,
+      "public_signup",
+    );
+    if ("error" in membership) {
+      return { error: membership.error };
+    }
+
+    return {
+      slug: tenant.slug,
+      redirectUrl: subscriptionResult.redirectUrl ?? `/app/${tenant.slug}`,
+    };
+  }
+
   return {
     slug: tenant.slug,
-    redirectUrl: subscriptionResult.redirectUrl,
+    redirectUrl:
+      subscriptionResult.redirectUrl ?? `/app/${tenant.slug}/pendiente`,
   };
 }

@@ -2,9 +2,19 @@ import Link from "next/link";
 
 import { ResumePaymentButton } from "@/components/subscriptions/resume-payment-button";
 import { createDbClient } from "@/lib/db/client";
-import { formatCents } from "@/lib/plans/money";
+import { billingCycleLabel, formatCents } from "@/lib/plans/money";
+import {
+  formatCycleDate,
+  getNextCycleDate,
+  normalizeBillingCycleDays,
+} from "@/lib/subscribers/billing-cycle";
+import {
+  deliveryMethodLabel,
+  paymentMethodLabel,
+} from "@/lib/subscribers/status-labels";
 import { requireTenantAccess } from "@/lib/tenants/require-tenant-access";
 import { isTenantManager } from "@/lib/auth/permissions";
+import type { DeliveryMethod, PaymentMethod } from "@/types/database";
 
 function statusLabel(status: string) {
   switch (status) {
@@ -30,10 +40,10 @@ export default async function TenantDashboardPage({
   searchParams,
 }: {
   params: Promise<{ tenantSlug: string }>;
-  searchParams: Promise<{ payment?: string }>;
+  searchParams: Promise<{ payment?: string; reset?: string }>;
 }) {
   const { tenantSlug } = await params;
-  const { payment } = await searchParams;
+  const { payment, reset } = await searchParams;
   const { user, tenant, role } = await requireTenantAccess(tenantSlug, {
     nextPath: `/app/${tenantSlug}`,
   });
@@ -50,7 +60,7 @@ export default async function TenantDashboardPage({
   const { data: subscriptions } = await db
     .from("subscriptions")
     .select(
-      "id, status, plan_id, final_price_cents, created_at, payment_method, mp_init_point, contact_email",
+      "id, status, plan_id, final_price_cents, created_at, payment_method, payment_reference, billing_cycle_days, contact_email, contact_phone, contact_first_name, contact_last_name, delivery_method, delivery_details, mp_init_point",
     )
     .eq("tenant_id", tenant.id)
     .eq("user_id", user.id)
@@ -72,15 +82,77 @@ export default async function TenantDashboardPage({
     }
   }
 
+  const subscriptionIds = (subscriptions ?? []).map((s) => s.id);
+  const choicesBySub = new Map<
+    string,
+    Array<{ fieldLabel: string; value: string }>
+  >();
+
+  if (subscriptionIds.length > 0) {
+    const { data: choices } = await db
+      .from("subscription_choices")
+      .select("subscription_id, field_id, option_id, text_value")
+      .in("subscription_id", subscriptionIds)
+      .is("deleted_at", null);
+
+    const fieldIds = [...new Set((choices ?? []).map((c) => c.field_id))];
+    const optionIds = [
+      ...new Set(
+        (choices ?? [])
+          .map((c) => c.option_id)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    const fieldsById = new Map<string, string>();
+    const optionsById = new Map<string, string>();
+
+    if (fieldIds.length > 0) {
+      const { data: fields } = await db
+        .from("plan_fields")
+        .select("id, label")
+        .in("id", fieldIds)
+        .is("deleted_at", null);
+      for (const field of fields ?? []) {
+        fieldsById.set(field.id, field.label);
+      }
+    }
+    if (optionIds.length > 0) {
+      const { data: options } = await db
+        .from("plan_field_options")
+        .select("id, label")
+        .in("id", optionIds)
+        .is("deleted_at", null);
+      for (const option of options ?? []) {
+        optionsById.set(option.id, option.label);
+      }
+    }
+
+    for (const choice of choices ?? []) {
+      const list = choicesBySub.get(choice.subscription_id) ?? [];
+      list.push({
+        fieldLabel: fieldsById.get(choice.field_id) ?? "Opción",
+        value:
+          (choice.option_id
+            ? optionsById.get(choice.option_id)
+            : choice.text_value) ?? "—",
+      });
+      choicesBySub.set(choice.subscription_id, list);
+    }
+  }
+
   return (
-    <div className="mx-auto max-w-4xl px-6 py-16">
+    <div className="ori-container py-12 sm:py-16">
       <p className="ori-eyebrow">{tenant.name}</p>
       <h1 className="ori-title mt-2">
-        {role === "subscriber" ? "Mis suscripciones" : "Panel del cliente"}
+        {role === "subscriber" ? "Mis suscripciones" : "Panel"}
       </h1>
-      <p className="mt-2 text-gray-600">
-        Sesión: {user.email} · Rol: {role}
-      </p>
+      <p className="mt-2 text-sm text-gray-500">{user.email}</p>
+
+      {reset === "1" && (
+        <p className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900">
+          Contraseña actualizada. Ya podés usar tu cuenta.
+        </p>
+      )}
 
       {payment === "return" && role === "subscriber" && (
         <p className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900">
@@ -106,6 +178,13 @@ export default async function TenantDashboardPage({
           ) : (
             (subscriptions ?? []).map((subscription) => {
               const plan = plansById.get(subscription.plan_id);
+              const cycleDays = normalizeBillingCycleDays(
+                subscription.billing_cycle_days,
+              );
+              const nextDate = getNextCycleDate(
+                subscription.created_at,
+                cycleDays,
+              );
               const needsCardPayment =
                 subscription.status === "pending_authorization" &&
                 (subscription.payment_method === "card_monthly" ||
@@ -113,102 +192,217 @@ export default async function TenantDashboardPage({
               const isTransferPending =
                 subscription.status === "pending_payment" &&
                 subscription.payment_method === "transfer";
+              const deliveryDetails = (subscription.delivery_details ??
+                {}) as Record<string, string>;
+              const choices = choicesBySub.get(subscription.id) ?? [];
 
               return (
                 <div key={subscription.id} className="ori-card space-y-4">
-                  <Link
-                    href={`/app/${tenant.slug}/mi-suscripcion/${subscription.id}`}
-                    className="block"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className="text-sm text-gray-600">Suscripción</p>
-                        <p className="mt-2 text-xl font-semibold text-gray-900">
-                          {plan?.name ?? "Plan"}
-                        </p>
-                        <p className="mt-1 text-sm text-gray-500">
-                          Estado: {statusLabel(subscription.status)}
-                        </p>
-                        {subscription.final_price_cents !== null && plan && (
-                          <p className="mt-1 text-sm text-gray-700">
-                            {formatCents(
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-sm text-gray-600">Suscripción</p>
+                      <p className="mt-2 text-xl font-semibold text-gray-900">
+                        {plan?.name ?? "Plan"}
+                      </p>
+                      <p className="mt-1 text-sm text-gray-500">
+                        Estado: {statusLabel(subscription.status)}
+                      </p>
+                    </div>
+                    <Link
+                      href={`/app/${tenant.slug}/mi-suscripcion/${subscription.id}`}
+                      className="text-sm font-medium text-gray-800 underline-offset-4 hover:underline"
+                    >
+                      Editar →
+                    </Link>
+                  </div>
+
+                  <div className="border-t border-gray-200" />
+
+                  <dl className="grid gap-3 text-sm sm:grid-cols-2">
+                    <div>
+                      <dt className="text-gray-600">Frecuencia</dt>
+                      <dd className="font-medium text-gray-900">
+                        {billingCycleLabel(cycleDays)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-gray-600">Próximo envío / cobro</dt>
+                      <dd className="font-medium text-gray-900">
+                        {formatCycleDate(nextDate)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-gray-600">Importe por ciclo</dt>
+                      <dd className="text-gray-900">
+                        {subscription.final_price_cents !== null && plan
+                          ? formatCents(
                               subscription.final_price_cents,
                               plan.currency,
-                            )}
-                          </p>
-                        )}
-                      </div>
-                      <span className="text-sm text-gray-500">
-                        Actualizar opciones →
-                      </span>
+                              cycleDays,
+                            )
+                          : "—"}
+                      </dd>
                     </div>
-                  </Link>
+                    <div>
+                      <dt className="text-gray-600">Inicio</dt>
+                      <dd className="text-gray-900">
+                        {new Date(subscription.created_at).toLocaleDateString(
+                          "es-AR",
+                        )}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-gray-600">Contacto</dt>
+                      <dd className="text-gray-900">
+                        {[
+                          subscription.contact_first_name,
+                          subscription.contact_last_name,
+                        ]
+                          .filter(Boolean)
+                          .join(" ") || "—"}
+                        <span className="block text-gray-600">
+                          {subscription.contact_email ?? "—"}
+                        </span>
+                        <span className="block text-gray-600">
+                          {subscription.contact_phone ?? "—"}
+                        </span>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-gray-600">Entrega</dt>
+                      <dd className="text-gray-900">
+                        {deliveryMethodLabel(
+                          subscription.delivery_method as DeliveryMethod | null,
+                        )}
+                        <ul className="mt-1 space-y-0.5 text-gray-600">
+                          {Object.entries(deliveryDetails).map(([key, value]) =>
+                            value ? (
+                              <li key={key}>
+                                {key}: {value}
+                              </li>
+                            ) : null,
+                          )}
+                        </ul>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-gray-600">Pago</dt>
+                      <dd className="text-gray-900">
+                        {paymentMethodLabel(
+                          subscription.payment_method as PaymentMethod | null,
+                        )}
+                        {subscription.payment_reference && (
+                          <span className="block text-gray-600">
+                            Op.: {subscription.payment_reference}
+                          </span>
+                        )}
+                      </dd>
+                    </div>
+                    {choices.length > 0 && (
+                      <div className="sm:col-span-2">
+                        <dt className="text-gray-600">Opciones del plan</dt>
+                        <dd className="mt-1 space-y-1 text-gray-900">
+                          {choices.map((choice, index) => (
+                            <p key={`${choice.fieldLabel}-${index}`}>
+                              <span className="text-gray-600">
+                                {choice.fieldLabel}:{" "}
+                              </span>
+                              {choice.value}
+                            </p>
+                          ))}
+                        </dd>
+                      </div>
+                    )}
+                  </dl>
+
+                  <p className="text-xs text-gray-600">
+                    Los cambios que hagas aplican para el próximo envío.
+                  </p>
 
                   {needsCardPayment && (
                     <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
                       <p className="text-sm text-amber-900">
                         Todavía falta autorizar el cobro en Mercado Pago.
                       </p>
-                      <div className="mt-3">
-                        <ResumePaymentButton
-                          tenantSlug={tenant.slug}
-                          subscriptionId={subscription.id}
-                          defaultEmail={
-                            subscription.contact_email || user.email || ""
-                          }
-                        />
-                      </div>
+                      <ResumePaymentButton
+                        tenantSlug={tenant.slug}
+                        subscriptionId={subscription.id}
+                        defaultEmail={
+                          subscription.contact_email ?? user.email
+                        }
+                      />
                     </div>
                   )}
 
                   {isTransferPending && (
                     <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                      Transferencia pendiente: el comercio la confirma cuando
-                      vea el dinero en su cuenta.
+                      Tu transferencia está pendiente de confirmación del
+                      comercio.
                     </p>
                   )}
                 </div>
               );
             })
           )}
+
           <Link
             href={`/app/${tenant.slug}/mi-suscripcion/agregar`}
-            className="ori-btn-primary inline-flex"
+            className="ori-btn-secondary inline-flex"
           >
-            Agregar suscripción
+            + Agregar otra suscripción
           </Link>
         </div>
       )}
 
       {isTenantManager(role) && (
-        <>
-          <div className="mt-8 grid gap-4 sm:grid-cols-2">
-            <div className="ori-card">
-              <p className="text-sm text-gray-600">Estado del tenant</p>
-              <p className="mt-2 text-xl font-semibold capitalize">
-                {tenant.status}
-              </p>
-            </div>
-            <div className="ori-card">
-              <p className="text-sm text-gray-600">Suscriptos</p>
-              <p className="mt-2 text-3xl font-semibold">{memberCount ?? 0}</p>
-            </div>
+        <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="ori-card">
+            <p className="text-sm text-gray-600">Dashboard</p>
+            <p className="mt-2 text-sm text-gray-700">
+              Métricas de suscriptores, ingresos y entregas.
+            </p>
+            <Link
+              href={`/app/${tenant.slug}/dashboard`}
+              className="mt-4 inline-block text-sm text-gray-800 underline"
+            >
+              Ver métricas
+            </Link>
           </div>
-          <div className="mt-6 flex flex-wrap gap-3">
+          <div className="ori-card">
+            <p className="text-sm text-gray-600">Suscriptores</p>
+            <p className="mt-2 text-3xl font-semibold">{memberCount ?? 0}</p>
             <Link
               href={`/app/${tenant.slug}/suscriptores`}
-              className="inline-flex rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-800 hover:border-gray-400"
+              className="mt-4 inline-block text-sm text-gray-800 underline"
             >
-              Gestionar registro de suscriptos →
-            </Link>
-            <Link
-              href={`/app/${tenant.slug}/suscripciones`}
-              className="inline-flex rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-800 hover:border-gray-400"
-            >
-              Gestionar suscripciones →
+              Ver suscriptores
             </Link>
           </div>
-        </>
+          <div className="ori-card">
+            <p className="text-sm text-gray-600">Suscripciones</p>
+            <p className="mt-2 text-sm text-gray-700">
+              Planes, precios y opciones del catálogo.
+            </p>
+            <Link
+              href={`/app/${tenant.slug}/suscripciones`}
+              className="mt-4 inline-block text-sm text-gray-800 underline"
+            >
+              Administrar planes
+            </Link>
+          </div>
+          <div className="ori-card">
+            <p className="text-sm text-gray-600">Pagos</p>
+            <p className="mt-2 text-sm text-gray-700">
+              Mercado Pago, transferencia e historial.
+            </p>
+            <Link
+              href={`/app/${tenant.slug}/pagos`}
+              className="mt-4 inline-block text-sm text-gray-800 underline"
+            >
+              Ir a Pagos
+            </Link>
+          </div>
+        </div>
       )}
     </div>
   );

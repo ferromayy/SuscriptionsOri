@@ -9,7 +9,7 @@ export function centsToPesos(cents: number): number {
 export function formatCents(
   cents: number,
   currency = "ars",
-  interval: "month" | "year" = "month",
+  period: "month" | "year" | 15 | 30 | 45 = "month",
 ): string {
   if (cents === 0) {
     return "Gratis";
@@ -20,5 +20,19 @@ export function formatCents(
     currency: currency.toUpperCase(),
   });
 
-  return `${amount} / ${interval === "month" ? "mes" : "año"}`;
+  const suffix =
+    period === "year"
+      ? "año"
+      : period === "month"
+        ? "mes"
+        : `${period} días`;
+
+  return `${amount} / ${suffix}`;
+}
+
+export function billingCycleLabel(days: 15 | 30 | 45 | null | undefined): string {
+  if (days === 15) return "Cada 15 días";
+  if (days === 45) return "Cada 45 días";
+  if (days === 30) return "Cada 30 días";
+  return "—";
 }

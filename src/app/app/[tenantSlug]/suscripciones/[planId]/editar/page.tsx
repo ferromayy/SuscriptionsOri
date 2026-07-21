@@ -22,7 +22,7 @@ export default async function EditSubscriptionPage({
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-16">
+    <div className="ori-container py-16">
       <p className="ori-eyebrow">{tenant.name}</p>
       <h1 className="ori-title mt-2">Editar suscripción</h1>
       <p className="ori-subtitle mt-4">

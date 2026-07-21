@@ -18,7 +18,7 @@ export default async function TenantOnboardingPage({
   const joinUrl = getTenantJoinUrl(tenant.slug);
 
   return (
-    <div className="mx-auto max-w-2xl px-6 py-16">
+    <div className="ori-container py-16">
       <p className="ori-eyebrow">Bienvenido</p>
       <h1 className="ori-title mt-2">{tenant.name}</h1>
       <p className="mt-4 text-gray-600">

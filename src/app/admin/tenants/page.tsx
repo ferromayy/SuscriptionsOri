@@ -61,7 +61,14 @@ export default async function TenantsListPage() {
                     key={tenant.id}
                     className="border-b border-gray-200/80 last:border-0"
                   >
-                    <td className="px-4 py-3 font-medium">{tenant.name}</td>
+                    <td className="px-4 py-3 font-medium">
+                      <Link
+                        href={`/admin/tenants/${tenant.id}`}
+                        className="text-gray-900 underline-offset-4 hover:underline"
+                      >
+                        {tenant.name}
+                      </Link>
+                    </td>
                     <td className="px-4 py-3 text-gray-600">{tenant.slug}</td>
                     <td className="px-4 py-3">
                       <TenantStatusBadge status={tenant.status} />
@@ -82,12 +89,20 @@ export default async function TenantsListPage() {
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <TenantRowActions
-                        tenantId={tenant.id}
-                        tenantName={tenant.name}
-                        status={tenant.status}
-                        hasPendingInvite={Boolean(invite)}
-                      />
+                      <div className="flex flex-wrap items-center gap-3">
+                        <Link
+                          href={`/admin/tenants/${tenant.id}`}
+                          className="text-sm text-gray-700 underline-offset-4 hover:underline"
+                        >
+                          Ver contacto
+                        </Link>
+                        <TenantRowActions
+                          tenantId={tenant.id}
+                          tenantName={tenant.name}
+                          status={tenant.status}
+                          hasPendingInvite={Boolean(invite)}
+                        />
+                      </div>
                     </td>
                   </tr>
                 );

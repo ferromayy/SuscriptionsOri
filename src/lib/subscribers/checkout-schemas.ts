@@ -1,5 +1,11 @@
 import { z } from "zod";
 
+import {
+  ARGENTINE_POSTAL_CODE_ERROR,
+  isValidArgentinePostalCode,
+  normalizeArgentinePostalCode,
+} from "@/lib/subscribers/argentine-postal-code";
+
 export const deliveryMethodSchema = z.enum([
   "shipping",
   "andreani",
@@ -16,19 +22,36 @@ export const paymentMethodSchema = z.enum([
 
 export type PaymentMethod = z.infer<typeof paymentMethodSchema>;
 
+export const billingCycleDaysSchema = z.union([
+  z.literal(15),
+  z.literal(30),
+  z.literal(45),
+]);
+
+export type BillingCycleDays = z.infer<typeof billingCycleDaysSchema>;
+
+const argentinePostalCodeSchema = z
+  .string()
+  .trim()
+  .min(1, "Ingresá el código postal")
+  .transform(normalizeArgentinePostalCode)
+  .refine(isValidArgentinePostalCode, ARGENTINE_POSTAL_CODE_ERROR);
+
+const provinceSchema = z.string().trim().min(1, "Elegí la provincia");
+
 const shippingDetailsSchema = z.object({
-  province: z.string().trim().min(1, "Ingresá la provincia"),
-  neighborhood: z.string().trim().min(1, "Ingresá el barrio"),
-  postalCode: z.string().trim().min(1, "Ingresá el código postal"),
+  province: provinceSchema,
+  locality: z.string().trim().min(1, "Ingresá la localidad"),
+  neighborhood: z.string().trim().optional(),
+  postalCode: argentinePostalCodeSchema,
   address: z.string().trim().min(1, "Ingresá la dirección"),
   apartment: z.string().trim().optional(),
 });
 
 const andreaniDetailsSchema = z.object({
-  postalCode: z
-    .string()
-    .trim()
-    .min(1, "Ingresá el código postal para elegir tu sucursal"),
+  province: provinceSchema,
+  locality: z.string().trim().min(1, "Ingresá la localidad"),
+  postalCode: argentinePostalCodeSchema,
   address: z.string().trim().min(1, "Ingresá la dirección de la sucursal"),
   number: z.string().trim().min(1, "Ingresá el número"),
 });
@@ -41,8 +64,13 @@ export const checkoutDetailsSchema = z
     lastName: z.string().trim().min(1, "Ingresá tu apellido"),
     deliveryMethod: deliveryMethodSchema,
     deliveryDetails: z.record(z.string(), z.string()).default({}),
+    /** How often to deliver / charge: every 15, 30, or 45 days. */
+    billingCycleDays: billingCycleDaysSchema,
     paymentMethod: paymentMethodSchema,
+    /** Número de operación / transacción bancaria. */
     paymentReference: z.string().trim().optional(),
+    /** Path in Supabase Storage for the uploaded receipt. */
+    paymentReceiptPath: z.string().trim().optional(),
     /** Email of the Mercado Pago account used to pay (can differ from Ori email). */
     mpPayerEmail: z.string().trim().email("Email de Mercado Pago inválido").optional(),
   })
@@ -80,15 +108,17 @@ export const checkoutDetailsSchema = z
       }
     }
 
-    if (
-      data.paymentMethod === "transfer" &&
-      (!data.paymentReference || data.paymentReference.trim().length === 0)
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Indicá una referencia o comprobante de transferencia",
-        path: ["paymentReference"],
-      });
+    if (data.paymentMethod === "transfer") {
+      const hasReference = Boolean(data.paymentReference?.trim());
+      const hasReceipt = Boolean(data.paymentReceiptPath?.trim());
+      if (!hasReference && !hasReceipt) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            "Indicá el número de operación y/o subí el comprobante de transferencia",
+          path: ["paymentReference"],
+        });
+      }
     }
 
     if (
@@ -117,8 +147,9 @@ export function normalizeDeliveryDetails(
   if (method === "shipping") {
     return {
       province: details.province?.trim() ?? "",
+      locality: details.locality?.trim() ?? "",
       neighborhood: details.neighborhood?.trim() ?? "",
-      postalCode: details.postalCode?.trim() ?? "",
+      postalCode: normalizeArgentinePostalCode(details.postalCode ?? ""),
       address: details.address?.trim() ?? "",
       apartment: details.apartment?.trim() ?? "",
     };
@@ -126,7 +157,9 @@ export function normalizeDeliveryDetails(
 
   if (method === "andreani") {
     return {
-      postalCode: details.postalCode?.trim() ?? "",
+      province: details.province?.trim() ?? "",
+      locality: details.locality?.trim() ?? "",
+      postalCode: normalizeArgentinePostalCode(details.postalCode ?? ""),
       address: details.address?.trim() ?? "",
       number: details.number?.trim() ?? "",
     };

@@ -37,7 +37,7 @@ export default async function TenantSubscriptionsPage({
   const subscriberCounts = await getSubscriberCountByPlan(tenant.id);
 
   return (
-    <div className="mx-auto max-w-4xl px-6 py-16">
+    <div className="ori-container py-16">
       <p className="ori-eyebrow">{tenant.name}</p>
       <h1 className="ori-title mt-2">Suscripciones</h1>
       <p className="ori-subtitle mt-4">
