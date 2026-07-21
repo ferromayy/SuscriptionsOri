@@ -286,35 +286,64 @@ export function JoinForm({
     setDeliveryDetails({});
   }
 
+  const allSteps = [
+    ["plan", "Experiencia"],
+    ["contact", "Contacto"],
+    ["delivery", "Entrega"],
+    ["payment", "Pago"],
+    ["account", "Cuenta"],
+  ] as const;
+  // Until a plan is picked, only show the first step to keep the screen clean.
+  const visibleSteps = selectedPlanId ? allSteps : allSteps.slice(0, 1);
+  const currentStepIndex = allSteps.findIndex(([key]) => key === step);
+
   return (
     <div className="mt-2">
-      <div className="mb-8 flex flex-wrap justify-center gap-2 text-xs sm:justify-start">
-        {(
-          [
-            ["plan", "1. Suscripción"],
-            ["contact", "2. Contacto"],
-            ["delivery", "3. Entrega"],
-            ["payment", "4. Pago"],
-            ["account", "5. Cuenta"],
-          ] as const
-        ).map(([key, label]) => (
-          <span
-            key={key}
-            className={`rounded-full px-3 py-1 ${
-              step === key
-                ? "bg-gray-900 text-white"
-                : "bg-gray-100 text-gray-600"
-            }`}
-          >
-            {label}
-          </span>
-        ))}
-      </div>
+      <ol className="mb-8 flex flex-wrap items-center justify-center gap-x-1 gap-y-2 sm:justify-start">
+        {visibleSteps.map(([key, label], index) => {
+          const isCurrent = step === key;
+          const isDone = index < currentStepIndex;
+          return (
+            <li key={key} className="flex items-center">
+              {index > 0 && (
+                <span
+                  className={`mx-1 h-px w-4 sm:w-6 ${
+                    isDone || isCurrent ? "bg-gray-900" : "bg-gray-200"
+                  }`}
+                  aria-hidden
+                />
+              )}
+              <span
+                className={`flex items-center gap-2 rounded-full py-1 pl-1 pr-3 text-xs transition ${
+                  isCurrent
+                    ? "bg-gray-900 text-white shadow-sm"
+                    : isDone
+                      ? "bg-gray-100 text-gray-900"
+                      : "bg-gray-50 text-gray-400"
+                }`}
+              >
+                <span
+                  className={`flex h-5 w-5 items-center justify-center rounded-full text-[0.65rem] font-semibold ${
+                    isCurrent
+                      ? "bg-white text-gray-900"
+                      : isDone
+                        ? "bg-gray-900 text-white"
+                        : "bg-gray-200 text-gray-500"
+                  }`}
+                >
+                  {isDone ? "✓" : index + 1}
+                </span>
+                <span className={isCurrent ? "font-medium" : ""}>{label}</span>
+              </span>
+            </li>
+          );
+        })}
+      </ol>
 
       {step === "plan" && (
         <>
           <fieldset>
-            <legend className="sr-only">Elegí una suscripción</legend>
+            <legend className="sr-only">Elegí tu experiencia Orí</legend>
             <div className="grid gap-4 sm:grid-cols-2">
               {plans.map((plan) => (
                 <label
@@ -343,7 +372,9 @@ export function JoinForm({
                     </span>
                   )}
                   <span className="mt-4 inline-block text-sm font-medium text-blue-600">
-                    {selectedPlanId === plan.id ? "Seleccionado" : "Ver plan"}
+                    {selectedPlanId === plan.id
+                      ? "Tu elección"
+                      : "Elegir experiencia"}
                   </span>
                 </label>
               ))}
@@ -352,14 +383,14 @@ export function JoinForm({
 
           {!selectedPlanId && (
             <p className="mt-4 text-center text-sm text-gray-500 sm:text-left">
-              Elegí una suscripción para continuar.
+              Elegí una experiencia para continuar.
             </p>
           )}
 
           {selectedPlan && selectedPlan.fields.length > 0 && (
             <fieldset className="mt-6 space-y-4 rounded-2xl border border-gray-200 bg-white p-4">
               <legend className="px-1 text-sm font-medium text-gray-900">
-                Personalizá tu suscripción
+                Personalizá tu experiencia
               </legend>
               {selectedPlan.fields.map((field) => (
                 <div key={field.id}>
