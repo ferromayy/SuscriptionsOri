@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { ConnectAccessTokenForm } from "@/components/payments/connect-access-token-form";
 import { ConnectMercadoPagoButton } from "@/components/payments/connect-mercadopago-button";
 import { DisconnectMercadoPagoButton } from "@/components/payments/disconnect-mercadopago-button";
 import { PaymentHistoryList } from "@/components/payments/payment-history-list";
@@ -188,6 +189,17 @@ export default async function TenantPaymentsPage({
               pueden pagar con tarjeta.
             </p>
             <ConnectMercadoPagoButton tenantSlug={tenant.slug} />
+            <div className="border-t border-gray-200 pt-4">
+              <h3 className="text-sm font-medium text-gray-900">
+                ¿La cuenta de Mercado Pago es la misma dueña de la aplicación?
+              </h3>
+              <p className="mt-1 mb-3 text-sm text-gray-600">
+                Mercado Pago no permite autorizar tu propia aplicación por
+                OAuth («la aplicación no puede conectarse a tu cuenta»). En ese
+                caso, conectá pegando el Access Token de producción.
+              </p>
+              <ConnectAccessTokenForm tenantSlug={tenant.slug} />
+            </div>
           </>
         )}
       </section>

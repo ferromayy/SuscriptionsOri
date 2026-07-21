@@ -284,6 +284,43 @@ export async function getValidAccessTokenForTenant(
   return refreshed.access_token;
 }
 
+/**
+ * Conexión manual con Access Token, para cuando el dueño de la aplicación
+ * es el mismo comercio (MP no permite autorizarse a sí mismo por OAuth).
+ * Valida el token contra /users/me y lo guarda como conexión activa.
+ */
+export async function connectTenantWithAccessToken(
+  tenantId: string,
+  accessToken: string,
+): Promise<{ error: string } | { ok: true }> {
+  const token = accessToken.trim();
+  if (!token) {
+    return { error: "Pegá el Access Token de producción de tu aplicación" };
+  }
+
+  const response = await fetch(`${getMpApiBaseUrl()}/users/me`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!response.ok) {
+    return {
+      error:
+        "Mercado Pago rechazó ese Access Token. Verificá que sea el de producción (empieza con APP_USR-) y que lo hayas copiado completo.",
+    };
+  }
+
+  const me = (await response.json()) as { id?: number | string; tags?: string[] };
+  const isTestUser = Array.isArray(me.tags) && me.tags.includes("test_user");
+
+  await upsertTenantMpConnection(tenantId, {
+    access_token: token,
+    user_id: me.id,
+    live_mode: !isTestUser,
+  });
+
+  return { ok: true };
+}
+
 export async function disconnectTenantMp(tenantId: string): Promise<void> {
   const db = createDbClient();
   const { error } = await db

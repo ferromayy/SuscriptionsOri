@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 
 import {
   buildAuthorizationUrl,
+  connectTenantWithAccessToken,
   createOAuthState,
   disconnectTenantMp,
   getTenantMpConnection,
@@ -43,6 +44,37 @@ export async function startMercadoPagoConnectAction(
   });
 
   redirect(buildAuthorizationUrl(state));
+}
+
+export async function connectWithAccessTokenAction(
+  tenantSlug: string,
+  _prev: PagosActionState,
+  formData: FormData,
+): Promise<PagosActionState> {
+  const { tenant } = await requireTenantAccess(tenantSlug, {
+    nextPath: `/app/${tenantSlug}/pagos`,
+    requireManager: true,
+  });
+
+  try {
+    const result = await connectTenantWithAccessToken(
+      tenant.id,
+      String(formData.get("accessToken") ?? ""),
+    );
+    if ("error" in result) {
+      return { error: result.error };
+    }
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : "No se pudo conectar con el Access Token",
+    };
+  }
+
+  revalidatePath(`/app/${tenantSlug}/pagos`);
+  return { error: null, success: "Mercado Pago conectado con Access Token" };
 }
 
 export async function disconnectMercadoPagoAction(
