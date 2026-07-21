@@ -34,7 +34,6 @@ import {
   normalizeLocalArgentinePhone,
   phoneValidationMessage,
 } from "@/lib/subscribers/contact-validation";
-import { BillingCyclePicker } from "@/components/subscriptions/billing-cycle-picker";
 import { PostalCodeField } from "@/components/subscribers/postal-code-field";
 import { ProvinceLocalityFields } from "@/components/subscribers/province-locality-fields";
 import Link from "next/link";
@@ -182,8 +181,8 @@ export function JoinForm({
     {},
   );
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | "">("");
-  const [billingCycleDays, setBillingCycleDays] =
-    useState<BillingCycleDays>(30);
+  // Fixed monthly cadence — every subscription bills/ships every 30 days.
+  const billingCycleDays: BillingCycleDays = 30;
   const [paymentReference, setPaymentReference] = useState("");
   const [paymentReceiptFile, setPaymentReceiptFile] = useState<File | null>(
     null,
@@ -270,7 +269,6 @@ export function JoinForm({
     : authMode === "signup"
       ? signUpPending
       : signInPending;
-  const planReady = Boolean(selectedPlanId) && fieldsComplete;
 
   if (isManager && managedState.success && managedState.userId) {
     return (
@@ -325,17 +323,17 @@ export function JoinForm({
   const isMarketing = layout === "marketing";
   const planGridClass =
     plans.length === 1
-      ? "grid gap-6 sm:max-w-lg"
+      ? "mx-auto grid w-full max-w-lg gap-6"
       : plans.length === 2
-        ? "grid gap-6 sm:grid-cols-2 lg:max-w-4xl"
+        ? "mx-auto grid w-full max-w-4xl gap-6 sm:grid-cols-2"
         : plans.length === 3
-          ? "grid gap-6 sm:grid-cols-2 lg:grid-cols-3"
-          : "grid gap-6 sm:grid-cols-2 lg:grid-cols-4";
+          ? "mx-auto grid w-full gap-6 sm:grid-cols-2 lg:grid-cols-3"
+          : "mx-auto grid w-full gap-6 sm:grid-cols-2 lg:grid-cols-4";
 
   return (
     <div className={isMarketing && step !== "plan" ? "mx-auto max-w-xl" : undefined}>
       {(selectedPlanId || !isMarketing) && (
-        <ol className="mb-8 flex flex-wrap items-center justify-center gap-x-1 gap-y-2 sm:justify-start">
+        <ol className="mb-8 flex flex-wrap items-center justify-center gap-x-1 gap-y-2">
           {visibleSteps.map(([key, label], index) => {
             const isCurrent = step === key;
             const isDone = index < currentStepIndex;
@@ -385,139 +383,146 @@ export function JoinForm({
               {plans.map((plan, index) => {
                 const selected = selectedPlanId === plan.id;
                 const accent = PLAN_ACCENTS[index % PLAN_ACCENTS.length];
+                const planIsReady =
+                  selected &&
+                  (plan.fields.length === 0 || fieldsComplete);
                 return (
-                  <label
+                  <div
                     key={plan.id}
                     className={`ori-plan-card ${
-                      selected ? "ori-plan-card-selected" : ""
+                      selected
+                        ? "ori-plan-card-selected"
+                        : selectedPlanId
+                          ? "ori-plan-card-dimmed"
+                          : ""
                     }`}
                   >
-                    <input
-                      type="radio"
-                      name="planChoice"
-                      value={plan.id}
-                      checked={selected}
-                      onChange={() => handlePlanChange(plan.id)}
-                      className="sr-only"
-                    />
-                    <span
-                      className="ori-plan-accent"
-                      style={{ backgroundColor: accent }}
-                      aria-hidden
-                    />
-                    <span className="ori-section-label pr-12">
-                      {planTagline(plan)}
-                    </span>
-                    <span className="mt-4 block pr-8 text-xl font-bold uppercase tracking-[0.05em] text-gray-900 sm:text-2xl">
-                      {plan.name}
-                    </span>
-                    <span className="mt-5 block h-px w-10 bg-gray-300" />
-                    <span className="mt-5 block text-base font-semibold text-gray-900">
-                      {formatPlanPrice(plan)}
-                    </span>
-                    {plan.description && (
-                      <span className="mt-4 block flex-1 text-[0.95rem] leading-relaxed text-gray-600">
-                        {plan.description}
+                    <label className="flex flex-1 cursor-pointer flex-col">
+                      <input
+                        type="radio"
+                        name="planChoice"
+                        value={plan.id}
+                        checked={selected}
+                        onChange={() => handlePlanChange(plan.id)}
+                        className="sr-only"
+                      />
+                      <span
+                        className="ori-plan-accent"
+                        style={{ backgroundColor: accent }}
+                        aria-hidden
+                      />
+                      <span className="ori-section-label pr-12">
+                        {planTagline(plan)}
                       </span>
+                      <span className="mt-4 block pr-8 text-xl font-bold uppercase tracking-[0.05em] text-gray-900 sm:text-2xl">
+                        {plan.name}
+                      </span>
+                      <span className="mt-5 block h-px w-10 bg-gray-300" />
+                      <span className="mt-5 block text-base font-semibold text-gray-900">
+                        {formatPlanPrice(plan)}
+                      </span>
+                      {plan.description && (
+                        <span className="mt-4 block flex-1 text-[0.95rem] leading-relaxed text-gray-600">
+                          {plan.description}
+                        </span>
+                      )}
+                      {!selected && (
+                        <span className="mt-8 text-xs font-semibold uppercase tracking-[0.18em] text-gray-400 transition-colors">
+                          Elegir →
+                        </span>
+                      )}
+                    </label>
+
+                    {selected && (
+                      <div className="mt-6 space-y-4 border-t border-gray-200 pt-5">
+                        {plan.fields.length > 0 && (
+                          <>
+                            <p className="text-sm font-medium text-gray-900">
+                              Personalizá tu experiencia
+                            </p>
+                            {plan.fields.map((field) => (
+                              <div key={field.id}>
+                                <label
+                                  htmlFor={`field-${field.id}`}
+                                  className="block text-sm text-gray-700"
+                                >
+                                  {field.label}
+                                </label>
+                                {field.fieldType === "select" ? (
+                                  <select
+                                    id={`field-${field.id}`}
+                                    value={selectedOptions[field.id] ?? ""}
+                                    onChange={(event) =>
+                                      setSelectedOptions((current) => ({
+                                        ...current,
+                                        [field.id]: event.target.value,
+                                      }))
+                                    }
+                                    className="ori-input mt-1"
+                                    required
+                                  >
+                                    <option value="">Elegí una opción</option>
+                                    {field.options.map((option) => (
+                                      <option key={option.id} value={option.id}>
+                                        {option.label}
+                                        {field.affectsPrice &&
+                                        option.priceDeltaCents > 0
+                                          ? ` (+${formatCents(option.priceDeltaCents, plan.currency).replace(/ \/ mes$/, "")})`
+                                          : ""}
+                                      </option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <input
+                                    id={`field-${field.id}`}
+                                    value={textValues[field.id] ?? ""}
+                                    onChange={(event) =>
+                                      setTextValues((current) => ({
+                                        ...current,
+                                        [field.id]: event.target.value,
+                                      }))
+                                    }
+                                    className="ori-input mt-1"
+                                    required
+                                  />
+                                )}
+                              </div>
+                            ))}
+                          </>
+                        )}
+                        {planIsReady && (
+                          <>
+                            {plan.fields.length > 0 && (
+                              <p className="text-sm font-medium text-gray-900">
+                                Total:{" "}
+                                {formatCents(
+                                  livePrice,
+                                  plan.currency,
+                                  plan.interval,
+                                )}
+                              </p>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setStep("contact")}
+                              className="ori-btn-primary mt-2 w-full"
+                            >
+                              Continuar
+                            </button>
+                          </>
+                        )}
+                      </div>
                     )}
-                    <span
-                      className={`mt-8 text-xs font-semibold uppercase tracking-[0.18em] transition-colors ${
-                        selected ? "text-gray-900" : "text-gray-400"
-                      }`}
-                    >
-                      {selected ? "Tu elección ✓" : "Elegir →"}
-                    </span>
-                  </label>
+                  </div>
                 );
               })}
             </div>
           </fieldset>
 
           {!selectedPlanId && (
-            <p className="mt-6 text-sm text-gray-500">
+            <p className="mt-6 text-center text-sm text-gray-500">
               Elegí una experiencia para continuar.
             </p>
-          )}
-
-          {selectedPlan && selectedPlan.fields.length > 0 && (
-            <fieldset
-              className={`mt-8 space-y-4 rounded-2xl border border-gray-200 bg-white p-5 ${
-                isMarketing ? "mx-auto max-w-xl" : ""
-              }`}
-            >
-              <legend className="px-1 text-sm font-medium text-gray-900">
-                Personalizá tu experiencia
-              </legend>
-              {selectedPlan.fields.map((field) => (
-                <div key={field.id}>
-                  <label
-                    htmlFor={`field-${field.id}`}
-                    className="block text-sm text-gray-700"
-                  >
-                    {field.label}
-                  </label>
-                  {field.fieldType === "select" ? (
-                    <select
-                      id={`field-${field.id}`}
-                      value={selectedOptions[field.id] ?? ""}
-                      onChange={(event) =>
-                        setSelectedOptions((current) => ({
-                          ...current,
-                          [field.id]: event.target.value,
-                        }))
-                      }
-                      className="ori-input mt-1"
-                      required
-                    >
-                      <option value="">Elegí una opción</option>
-                      {field.options.map((option) => (
-                        <option key={option.id} value={option.id}>
-                          {option.label}
-                          {field.affectsPrice && option.priceDeltaCents > 0
-                            ? ` (+${formatCents(option.priceDeltaCents, selectedPlan.currency).replace(/ \/ mes$/, "")})`
-                            : ""}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      id={`field-${field.id}`}
-                      value={textValues[field.id] ?? ""}
-                      onChange={(event) =>
-                        setTextValues((current) => ({
-                          ...current,
-                          [field.id]: event.target.value,
-                        }))
-                      }
-                      className="ori-input mt-1"
-                      required
-                    />
-                  )}
-                </div>
-              ))}
-              {fieldsComplete && (
-                <p className="text-sm font-medium text-gray-900">
-                  Total:{" "}
-                  {formatCents(
-                    livePrice,
-                    selectedPlan.currency,
-                    selectedPlan.interval,
-                  )}
-                </p>
-              )}
-            </fieldset>
-          )}
-
-          {planReady && (
-            <div className={isMarketing ? "mx-auto mt-6 max-w-xl" : "mt-6"}>
-              <button
-                type="button"
-                onClick={() => setStep("contact")}
-                className="ori-btn-primary w-full"
-              >
-                Continuar
-              </button>
-            </div>
           )}
         </>
       )}
@@ -751,7 +756,7 @@ export function JoinForm({
 
       {step === "payment" && (
         <section className="space-y-4">
-          <h2 className="text-lg font-medium text-gray-900">Pago y frecuencia</h2>
+          <h2 className="text-lg font-medium text-gray-900">Pago</h2>
           {selectedPlan && (
             <p className="text-sm text-gray-600">
               Precio por ciclo:{" "}
@@ -760,13 +765,10 @@ export function JoinForm({
               </span>
             </p>
           )}
-
-          <BillingCyclePicker
-            value={billingCycleDays}
-            onChange={setBillingCycleDays}
-            priceCents={livePrice}
-            currency={selectedPlan?.currency}
-          />
+          <p className="text-xs text-gray-500">
+            El cobro y el envío se repiten cada 30 días desde el inicio de tu
+            suscripción.
+          </p>
 
           {!isManager &&
             !paymentOptions.cardsEnabled &&

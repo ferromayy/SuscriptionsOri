@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { TransferPaymentGuide } from "@/components/payments/transfer-payment-guide";
 import { ResumePaymentButton } from "@/components/subscriptions/resume-payment-button";
 import { createDbClient } from "@/lib/db/client";
 import { billingCycleLabel, formatCents } from "@/lib/plans/money";
@@ -339,6 +340,13 @@ export default async function TenantDashboardPage({
                       Tu transferencia está pendiente de confirmación del
                       comercio.
                     </p>
+                  )}
+
+                  {subscription.payment_method === "transfer" && (
+                    <TransferPaymentGuide
+                      tenantSlug={tenant.slug}
+                      variant="compact"
+                    />
                   )}
                 </div>
               );

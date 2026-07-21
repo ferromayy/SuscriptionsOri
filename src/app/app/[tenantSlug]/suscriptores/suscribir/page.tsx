@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { JoinForm } from "@/components/join/join-form";
 import { getTenantMpConnection } from "@/lib/mercadopago/oauth";
+import { CARD_PAYMENTS_ENABLED } from "@/lib/payments/feature-flags";
 import { getActivePlansForTenant } from "@/lib/plans/get-plans";
 import { requireTenantAccess } from "@/lib/tenants/require-tenant-access";
 
@@ -19,7 +20,7 @@ export default async function ManagerSubscribePage({
   const plans = await getActivePlansForTenant(tenant.id);
   const mpConnection = await getTenantMpConnection(tenant.id);
   const paymentOptions = {
-    cardsEnabled: Boolean(mpConnection),
+    cardsEnabled: CARD_PAYMENTS_ENABLED && Boolean(mpConnection),
     transferEnabled: Boolean(
       mpConnection?.transferAlias || mpConnection?.transferCbu,
     ),

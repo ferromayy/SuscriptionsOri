@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { TransferPaymentGuide } from "@/components/payments/transfer-payment-guide";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { getTenantRole } from "@/lib/auth/permissions";
 import { createDbClient } from "@/lib/db/client";
@@ -83,14 +84,17 @@ export default async function PendingSubscriptionPage({
                 )}
               </p>
               {isTransfer ? (
-                <p className="text-gray-700">
-                  Estamos esperando la confirmación de tu transferencia
-                  {subscription.payment_reference
-                    ? ` (op. ${subscription.payment_reference})`
-                    : ""}
-                  . Cuando el comercio la confirme, tu cuenta quedará registrada
-                  y la suscripción activa.
-                </p>
+                <>
+                  <p className="text-gray-700">
+                    Estamos esperando la confirmación de tu transferencia
+                    {subscription.payment_reference
+                      ? ` (op. ${subscription.payment_reference})`
+                      : ""}
+                    . Cuando el comercio la confirme, tu cuenta quedará
+                    registrada y la suscripción activa.
+                  </p>
+                  <TransferPaymentGuide tenantSlug={tenant.slug} />
+                </>
               ) : (
                 <p className="text-gray-700">
                   Falta autorizar el cobro. Cuando Mercado Pago lo confirme, vas

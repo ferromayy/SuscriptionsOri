@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { ManageSubscriptionForm } from "@/components/subscriptions/manage-subscription-form";
 import { getTenantMpConnection } from "@/lib/mercadopago/oauth";
+import { CARD_PAYMENTS_ENABLED } from "@/lib/payments/feature-flags";
 import { getActivePlansForTenant } from "@/lib/plans/get-plans";
 import { getSubscriberSubscription } from "@/lib/subscribers/get-subscription-for-edit";
 import { requireTenantAccess } from "@/lib/tenants/require-tenant-access";
@@ -80,7 +81,7 @@ export default async function ManagerEditSubscriptionPage({
         submitLabel="Guardar cambios"
         actingAsUserId={userId}
         paymentOptions={{
-          cardsEnabled: Boolean(mpConnection),
+          cardsEnabled: CARD_PAYMENTS_ENABLED && Boolean(mpConnection),
           transferEnabled: Boolean(
             mpConnection?.transferAlias || mpConnection?.transferCbu,
           ),

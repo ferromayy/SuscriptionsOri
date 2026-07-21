@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { ManageSubscriptionForm } from "@/components/subscriptions/manage-subscription-form";
 import { createDbClient } from "@/lib/db/client";
 import { getTenantMpConnection } from "@/lib/mercadopago/oauth";
+import { CARD_PAYMENTS_ENABLED } from "@/lib/payments/feature-flags";
 import { getActivePlansForTenant } from "@/lib/plans/get-plans";
 import { getSubscriberPlanIds } from "@/lib/subscribers/get-subscription-for-edit";
 import { requireTenantAccess } from "@/lib/tenants/require-tenant-access";
@@ -103,7 +104,7 @@ export default async function AddSubscriptionForSubscriberPage({
           actingAsUserId={userId}
           initialContact={initialContact}
           paymentOptions={{
-            cardsEnabled: Boolean(mpConnection),
+            cardsEnabled: CARD_PAYMENTS_ENABLED && Boolean(mpConnection),
             transferEnabled: Boolean(
               mpConnection?.transferAlias || mpConnection?.transferCbu,
             ),

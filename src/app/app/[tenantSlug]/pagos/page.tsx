@@ -5,6 +5,7 @@ import { ConnectMercadoPagoButton } from "@/components/payments/connect-mercadop
 import { DisconnectMercadoPagoButton } from "@/components/payments/disconnect-mercadopago-button";
 import { PaymentHistoryList } from "@/components/payments/payment-history-list";
 import { TransferDetailsForm } from "@/components/payments/transfer-details-form";
+import { TransferPaymentGuide } from "@/components/payments/transfer-payment-guide";
 import { isTenantManager } from "@/lib/auth/permissions";
 import { createDbClient } from "@/lib/db/client";
 import { isMercadoPagoConfigured } from "@/lib/mercadopago/env";
@@ -34,6 +35,17 @@ export default async function TenantPaymentsPage({
   });
 
   if (!manager) {
+    const { data: transferSubs } = await createDbClient()
+      .from("subscriptions")
+      .select("id")
+      .eq("tenant_id", tenant.id)
+      .eq("user_id", user.id)
+      .eq("payment_method", "transfer")
+      .is("deleted_at", null)
+      .limit(1);
+
+    const hasTransferSubscription = (transferSubs ?? []).length > 0;
+
     return (
       <div className="ori-container py-16">
         <p className="ori-eyebrow">{tenant.name}</p>
@@ -41,6 +53,12 @@ export default async function TenantPaymentsPage({
         <p className="ori-subtitle mt-4">
           Historial de tus pagos, con fecha y día de cobro de cada ciclo.
         </p>
+
+        {hasTransferSubscription && (
+          <section className="mt-8">
+            <TransferPaymentGuide tenantSlug={tenant.slug} />
+          </section>
+        )}
 
         <section className="mt-8 ori-card space-y-4">
           <h2 className="text-lg font-medium text-gray-900">

@@ -10,7 +10,6 @@ import {
   managerUpsertSubscriptionAction,
   type ManagerUpsertState,
 } from "@/app/app/[tenantSlug]/suscriptores/actions";
-import { BillingCyclePicker } from "@/components/subscriptions/billing-cycle-picker";
 import {
   calculateLivePlanPrice,
   formatPlanPrice,
@@ -199,8 +198,8 @@ export function ManageSubscriptionForm({
     {},
   );
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | "">("");
-  const [billingCycleDays, setBillingCycleDays] =
-    useState<BillingCycleDays>(30);
+  // Fixed monthly cadence — every subscription bills/ships every 30 days.
+  const billingCycleDays: BillingCycleDays = 30;
   const [paymentReference, setPaymentReference] = useState("");
   const [paymentReceiptFile, setPaymentReceiptFile] = useState<File | null>(
     null,
@@ -365,18 +364,6 @@ export function ManageSubscriptionForm({
             )}
           </fieldset>
         )}
-
-        <div className="mt-6 ori-card">
-          <BillingCyclePicker
-            value={billingCycleDays}
-            onChange={setBillingCycleDays}
-            priceCents={livePrice}
-            currency={selectedPlan?.currency}
-          />
-          <p className="mt-3 text-xs text-gray-500">
-            El cambio aplica para el próximo envío / cobro.
-          </p>
-        </div>
 
         {planReady && (
           <form action={formAction} className="mt-6">
@@ -710,7 +697,7 @@ export function ManageSubscriptionForm({
 
       {step === "payment" && paymentOptions && (
         <section className="space-y-4">
-          <h2 className="text-lg font-medium text-gray-900">Pago y frecuencia</h2>
+          <h2 className="text-lg font-medium text-gray-900">Pago</h2>
           {selectedPlan && (
             <p className="text-sm text-gray-600">
               Precio por ciclo:{" "}
@@ -720,12 +707,10 @@ export function ManageSubscriptionForm({
             </p>
           )}
 
-          <BillingCyclePicker
-            value={billingCycleDays}
-            onChange={setBillingCycleDays}
-            priceCents={livePrice}
-            currency={selectedPlan?.currency}
-          />
+          <p className="text-xs text-gray-500">
+            El cobro y el envío se repiten cada 30 días desde el inicio de la
+            suscripción.
+          </p>
 
           {!isManager &&
             !paymentOptions?.cardsEnabled &&

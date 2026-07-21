@@ -79,8 +79,25 @@ export default async function TenantSubscribersPage({
         .order("created_at", { ascending: false })
     : { data: [] as never[] };
 
+  // Pending transfers must be fetched directly by tenant: the subscriber only
+  // becomes a tenant member after the payment is confirmed, so filtering by
+  // membership would hide every new pending transfer.
+  const { data: pendingWithReceipt } = await db
+    .from("subscriptions")
+    .select(
+      "id, payment_reference, payment_receipt_path, contact_email, contact_first_name, contact_last_name, final_price_cents, plan_id, user_id, created_at",
+    )
+    .eq("tenant_id", tenant.id)
+    .eq("status", "pending_payment")
+    .eq("payment_method", "transfer")
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false });
+
   const planIds = [
-    ...new Set((allSubscriptions ?? []).map((sub) => sub.plan_id)),
+    ...new Set([
+      ...(allSubscriptions ?? []).map((sub) => sub.plan_id),
+      ...(pendingWithReceipt ?? []).map((sub) => sub.plan_id),
+    ]),
   ];
   const plansById = new Map<string, { name: string; currency: string }>();
   if (planIds.length > 0) {
@@ -102,24 +119,6 @@ export default async function TenantSubscribersPage({
   }
 
   const plans = await getActivePlansForTenant(tenant.id);
-
-  const pendingTransfers = (allSubscriptions ?? []).filter(
-    (sub) => sub.status === "pending_payment",
-  );
-
-  const { data: pendingWithReceipt } = pendingTransfers.length
-    ? await db
-        .from("subscriptions")
-        .select(
-          "id, payment_reference, payment_receipt_path, contact_email, contact_first_name, contact_last_name, final_price_cents, plan_id, user_id, created_at",
-        )
-        .in(
-          "id",
-          pendingTransfers.map((s) => s.id),
-        )
-        .eq("payment_method", "transfer")
-        .is("deleted_at", null)
-    : { data: [] as never[] };
 
   const receiptUrls = new Map<string, string>();
   for (const sub of pendingWithReceipt ?? []) {

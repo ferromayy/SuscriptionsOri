@@ -18,6 +18,7 @@ import {
 import {
   getTenantMpConnection,
 } from "@/lib/mercadopago/oauth";
+import { CARD_PAYMENTS_ENABLED } from "@/lib/payments/feature-flags";
 import {
   billingIntervalFromPaymentMethod,
   checkoutDetailsSchema,
@@ -181,6 +182,12 @@ export async function upsertSubscriberSubscription(
     parsedCheckout.paymentMethod === "card_monthly" ||
     parsedCheckout.paymentMethod === "card_annual"
   ) {
+    if (!CARD_PAYMENTS_ENABLED) {
+      return {
+        error:
+          "El pago con tarjeta no está disponible por ahora. Usá transferencia.",
+      };
+    }
     if (!mpConnection) {
       return {
         error:

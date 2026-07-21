@@ -5,6 +5,7 @@ import { JoinForm } from "@/components/join/join-form";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { getTenantRole, isTenantManager } from "@/lib/auth/permissions";
 import { getTenantMpConnection } from "@/lib/mercadopago/oauth";
+import { CARD_PAYMENTS_ENABLED } from "@/lib/payments/feature-flags";
 import { getActivePlansForTenant } from "@/lib/plans/get-plans";
 import { getTenantBySlug } from "@/lib/tenants/get-tenant-by-slug";
 
@@ -118,7 +119,7 @@ export default async function TenantJoinPage({
   const plans = await getActivePlansForTenant(tenant.id);
   const mpConnection = await getTenantMpConnection(tenant.id);
   const paymentOptions = {
-    cardsEnabled: Boolean(mpConnection),
+    cardsEnabled: CARD_PAYMENTS_ENABLED && Boolean(mpConnection),
     transferEnabled: Boolean(
       mpConnection?.transferAlias || mpConnection?.transferCbu,
     ),
