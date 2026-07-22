@@ -16,12 +16,12 @@ export default async function PendingSubscriptionPage({
   const { tenantSlug } = await params;
   const user = await getCurrentUser();
   if (!user) {
-    redirect(`/auth/login?next=${encodeURIComponent(`/app/${tenantSlug}/pendiente`)}`);
+    redirect(`/app/${tenantSlug}/login?next=${encodeURIComponent(`/app/${tenantSlug}/pendiente`)}`);
   }
 
   const tenant = await getTenantBySlug(tenantSlug);
   if (!tenant || tenant.status !== "active") {
-    redirect("/");
+    redirect(`/app/${tenantSlug}/join`);
   }
 
   const role = await getTenantRole(user.id, tenant.id);
@@ -112,8 +112,11 @@ export default async function PendingSubscriptionPage({
       <p className="mt-8 text-sm text-gray-600">
         Sesión: {user.email}. Si necesitás ayuda, contactá al comercio.
       </p>
-      <Link href="/" className="mt-4 inline-block text-sm text-gray-700 underline-offset-4 hover:underline">
-        Ir al inicio
+      <Link
+        href={`/app/${tenant.slug}/join`}
+        className="mt-4 inline-block text-sm text-gray-700 underline-offset-4 hover:underline"
+      >
+        Volver a suscripciones
       </Link>
     </div>
   );

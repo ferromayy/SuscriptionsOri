@@ -187,7 +187,7 @@ export function JoinExperience({
         >
           ¿Ya tenés cuenta?{" "}
           <Link
-            href={`/auth/login?next=/app/${tenantSlug}/join`}
+            href={`/app/${tenantSlug}/login`}
             className="font-medium text-gray-800 underline-offset-4 hover:underline"
           >
             Iniciar sesión

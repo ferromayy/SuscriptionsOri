@@ -55,7 +55,7 @@ export default async function ClientInvitePage({
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
           <Link
-            href={`/auth/login?next=/app/${state.tenantSlug}`}
+            href={`/app/${state.tenantSlug}/login`}
             className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white"
           >
             Iniciar sesión

@@ -17,8 +17,18 @@ export function middleware(request: NextRequest) {
   }
 
   if (pathname.startsWith("/app")) {
-    const isPublicJoin = /^\/app\/[^/]+\/join\/?$/.test(pathname);
-    if (!hasSession && !isPublicJoin) {
+    const isPublic =
+      /^\/app\/[^/]+\/join\/?$/.test(pathname) ||
+      /^\/app\/[^/]+\/login\/?$/.test(pathname);
+
+    if (!hasSession && !isPublic) {
+      const tenantMatch = pathname.match(/^\/app\/([^/]+)/);
+      const tenantSlug = tenantMatch?.[1];
+      if (tenantSlug) {
+        const url = new URL(`/app/${tenantSlug}/login`, request.url);
+        url.searchParams.set("next", pathname);
+        return NextResponse.redirect(url);
+      }
       const url = new URL("/auth/login", request.url);
       url.searchParams.set("next", pathname);
       return NextResponse.redirect(url);

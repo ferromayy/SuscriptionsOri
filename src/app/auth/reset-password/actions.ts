@@ -50,6 +50,10 @@ export async function resetPasswordAction(
   await establishSession(result.userId);
 
   const next = String(formData.get("next") ?? "/");
-  const destination = await resolvePostLoginRedirect(result.userId, next);
+  const tenantMatch = next.match(/^\/app\/([^/]+)/);
+  const destination = await resolvePostLoginRedirect(result.userId, next, {
+    tenantSlug: tenantMatch?.[1] ?? null,
+    audience: tenantMatch?.[1] ? "subscriber" : "auto",
+  });
   redirect(`${destination}?reset=1`);
 }

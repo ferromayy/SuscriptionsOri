@@ -13,13 +13,10 @@ export default function FindJoinPage() {
         </p>
         <FindJoinForm />
         <div className="mt-6 space-y-2 border-t border-gray-200 pt-6 text-sm">
-          <p className="text-gray-500">¿Ya tenés cuenta?</p>
-          <Link
-            href="/auth/login"
-            className="text-gray-700 hover:text-gray-600"
-          >
-            Iniciar sesión →
-          </Link>
+          <p className="text-gray-500">
+            ¿Ya tenés cuenta de suscriptor? Buscá tu comercio arriba y, en su
+            página, tocá <strong>Ingresar</strong>.
+          </p>
         </div>
         <Link
           href="/"

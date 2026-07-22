@@ -9,21 +9,39 @@ const initialState: AuthActionState = { error: null };
 
 export function LoginForm({
   searchParams,
+  tenantSlug,
+  defaultNext = "/",
+  audience = "auto",
 }: {
-  searchParams: Promise<{ next?: string; error?: string }>;
+  searchParams?: Promise<{ next?: string; error?: string }>;
+  tenantSlug?: string;
+  defaultNext?: string;
+  audience?: "subscriber" | "manager" | "auto";
 }) {
   const [state, formAction, pending] = useActionState(loginAction, initialState);
-  const [next, setNext] = React.useState("/");
+  const [next, setNext] = React.useState(defaultNext);
 
   React.useEffect(() => {
+    if (!searchParams) {
+      setNext(defaultNext);
+      return;
+    }
     searchParams.then((params) => {
-      setNext(params.next ?? "/");
+      setNext(params.next ?? defaultNext);
     });
-  }, [searchParams]);
+  }, [searchParams, defaultNext]);
+
+  const forgotHref = `/auth/forgot-password${
+    next !== "/" ? `?next=${encodeURIComponent(next)}` : ""
+  }`;
 
   return (
     <form action={formAction} className="mt-8 space-y-4">
       <input type="hidden" name="next" value={next} />
+      <input type="hidden" name="audience" value={audience} />
+      {tenantSlug ? (
+        <input type="hidden" name="tenantSlug" value={tenantSlug} />
+      ) : null}
       <div>
         <label htmlFor="email" className="block text-sm text-gray-700">
           Email
@@ -43,8 +61,8 @@ export function LoginForm({
             Contraseña
           </label>
           <a
-            href={`/auth/forgot-password${next !== "/" ? `?next=${encodeURIComponent(next)}` : ""}`}
-            className="text-xs text-gray-600 hover:text-gray-900 underline-offset-4 hover:underline"
+            href={forgotHref}
+            className="text-xs text-gray-600 underline-offset-4 hover:text-gray-900 hover:underline"
           >
             ¿Olvidaste tu contraseña?
           </a>

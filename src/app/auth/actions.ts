@@ -54,6 +54,12 @@ export async function loginAction(
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
   const next = String(formData.get("next") ?? "/");
+  const tenantSlug = String(formData.get("tenantSlug") ?? "").trim();
+  const audienceRaw = String(formData.get("audience") ?? "auto").trim();
+  const audience =
+    audienceRaw === "subscriber" || audienceRaw === "manager"
+      ? audienceRaw
+      : "auto";
 
   if (!email || !password) {
     return { error: "Email y contraseña son obligatorios" };
@@ -64,7 +70,39 @@ export async function loginAction(
     return { error: result.error ?? "Credenciales inválidas" };
   }
 
-  const destination = await resolvePostLoginRedirect(result.userId, next);
+  if (audience === "subscriber") {
+    if (!tenantSlug) {
+      await clearCurrentSession();
+      return { error: "Falta el comercio para iniciar sesión de suscriptor." };
+    }
+    const { assertSubscriberLoginAllowed } = await import(
+      "@/lib/auth/assert-subscriber-login"
+    );
+    const blocked = await assertSubscriberLoginAllowed(
+      result.userId,
+      tenantSlug,
+    );
+    if (blocked) {
+      await clearCurrentSession();
+      return { error: blocked };
+    }
+  }
+
+  if (audience === "manager") {
+    const { assertManagerLoginAllowed } = await import(
+      "@/lib/auth/assert-manager-login"
+    );
+    const blocked = await assertManagerLoginAllowed(result.userId);
+    if (blocked) {
+      await clearCurrentSession();
+      return { error: blocked };
+    }
+  }
+
+  const destination = await resolvePostLoginRedirect(result.userId, next, {
+    tenantSlug: tenantSlug || null,
+    audience,
+  });
   redirect(destination);
 }
 

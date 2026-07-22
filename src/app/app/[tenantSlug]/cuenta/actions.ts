@@ -39,7 +39,7 @@ const deleteAccountSchema = z.object({
 async function requireAccountUser(tenantSlug: string) {
   const user = await getCurrentUser();
   if (!user) {
-    redirect(`/auth/login?next=/app/${tenantSlug}/cuenta`);
+    redirect(`/app/${tenantSlug}/login?next=/app/${tenantSlug}/cuenta`);
   }
 
   const tenant = await getTenantBySlug(tenantSlug);

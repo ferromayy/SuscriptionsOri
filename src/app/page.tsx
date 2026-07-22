@@ -115,15 +115,19 @@ export default async function Home() {
             href="/auth/login"
             className="rounded-xl border border-gray-200 bg-gray-50 p-6 transition hover:border-gray-300"
           >
-            <h3 className="font-medium">Iniciar sesión</h3>
-            <p className="mt-2 text-sm text-gray-600">Ya tengo cuenta</p>
+            <h3 className="font-medium">Acceso de organización</h3>
+            <p className="mt-2 text-sm text-gray-600">
+              Dueños y administradores del comercio
+            </p>
           </Link>
           <Link
             href="/join"
             className="rounded-xl border border-gray-200 bg-gray-50 p-6 transition hover:border-gray-300"
           >
-            <h3 className="font-medium">Registrarme</h3>
-            <p className="mt-2 text-sm text-gray-600">Soy suscriptor nuevo</p>
+            <h3 className="font-medium">Soy suscriptor</h3>
+            <p className="mt-2 text-sm text-gray-600">
+              Encontrar el portal de mi comercio
+            </p>
           </Link>
         </section>
       </div>

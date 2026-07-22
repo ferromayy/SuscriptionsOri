@@ -36,6 +36,12 @@ export async function requireTenantAccess(
   const user = await getCurrentUser();
 
   if (!user) {
+    const tenantLogin = options.nextPath.match(/^\/app\/([^/]+)/);
+    if (tenantLogin?.[1]) {
+      redirect(
+        `/app/${tenantLogin[1]}/login?next=${encodeURIComponent(options.nextPath)}`,
+      );
+    }
     redirect(`/auth/login?next=${encodeURIComponent(options.nextPath)}`);
   }
 
@@ -52,7 +58,7 @@ export async function requireTenantAccess(
   const role = await getTenantRole(user.id, tenant.id);
 
   if (!role) {
-    redirect(options.unauthorizedRedirect ?? "/");
+    redirect(options.unauthorizedRedirect ?? `/app/${tenant.slug}/join`);
   }
 
   if (options.requireManager && !isTenantManager(role)) {
