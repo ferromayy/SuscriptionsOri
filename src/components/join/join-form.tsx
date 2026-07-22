@@ -601,6 +601,10 @@ export function JoinForm({
               Elegí una experiencia para continuar.
             </p>
           )}
+          <p className="mt-8 text-center text-sm text-gray-500">
+            Pronto vamos a sumar más planes.{" "}
+            <span className="text-gray-400">Estamos preparando nuevas experiencias.</span>
+          </p>
         </div>
       )}
 

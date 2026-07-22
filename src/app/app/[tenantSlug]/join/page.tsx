@@ -136,8 +136,14 @@ export default async function TenantJoinPage({
 
       <JoinExperience
         tenantSlug={tenant.slug}
+        tenantName={tenant.name}
         plans={plans}
         paymentOptions={paymentOptions}
+        supportWhatsapp={
+          tenant.supportWhatsapp ||
+          process.env.NEXT_PUBLIC_SUPPORT_WHATSAPP?.trim() ||
+          null
+        }
       />
     </JoinShell>
   );

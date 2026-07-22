@@ -9,6 +9,7 @@ export type PublicTenant = {
   slug: string;
   status: string;
   allowPublicSignup: boolean;
+  supportWhatsapp: string | null;
 };
 
 export const getTenantBySlug = cache(async function getTenantBySlug(
@@ -31,5 +32,6 @@ export const getTenantBySlug = cache(async function getTenantBySlug(
     slug: data.slug,
     status: data.status,
     allowPublicSignup: settings.allow_public_signup,
+    supportWhatsapp: settings.support_whatsapp,
   };
 });

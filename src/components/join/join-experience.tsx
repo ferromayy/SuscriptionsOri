@@ -8,6 +8,7 @@ import {
   JoinForm,
   type JoinPaymentOptions,
 } from "@/components/join/join-form";
+import { JoinWhatsAppHelp } from "@/components/join/join-whatsapp-help";
 import type { PublicPlan } from "@/lib/plans/get-plans";
 
 const JOIN_BENEFITS = [
@@ -49,12 +50,16 @@ const JOIN_STEPS = [
 
 export function JoinExperience({
   tenantSlug,
+  tenantName,
   plans,
   paymentOptions,
+  supportWhatsapp,
 }: {
   tenantSlug: string;
+  tenantName: string;
   plans: PublicPlan[];
   paymentOptions: JoinPaymentOptions;
+  supportWhatsapp: string | null;
 }) {
   const [inCheckout, setInCheckout] = useState(false);
 
@@ -122,6 +127,13 @@ export function JoinExperience({
             onCheckoutActiveChange={setInCheckout}
           />
         </section>
+
+        {supportWhatsapp && (
+          <JoinWhatsAppHelp
+            phone={supportWhatsapp}
+            brandName={tenantName}
+          />
+        )}
 
         {!inCheckout && (
           <>

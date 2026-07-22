@@ -14,6 +14,26 @@ import type {
 
 const CYCLE_DAYS = 30;
 
+function isMissingPaymentCyclesTable(message: string | undefined): boolean {
+  return Boolean(
+    message?.includes("payment_cycles") &&
+      (message.includes("schema cache") ||
+        message.includes("does not exist") ||
+        message.includes("Could not find the table")),
+  );
+}
+
+function logPaymentCyclesError(context: string, message: string | undefined) {
+  if (isMissingPaymentCyclesTable(message)) {
+    // Migration not applied yet — avoid Next.js red overlay on every page load.
+    console.warn(
+      `[payment_cycles] ${context}: tabla ausente. Corré supabase/migrations/20250721200000_payment_cycles.sql en el SQL Editor.`,
+    );
+    return;
+  }
+  console.error(`[payment_cycles] ${context}`, message);
+}
+
 function addDays(dateKey: string, days: number): string {
   const date = new Date(`${dateKey}T12:00:00`);
   date.setDate(date.getDate() + days);
@@ -199,7 +219,7 @@ export async function ensureCurrentPaymentCycle(
     .select("*")
     .single();
   if (error || !inserted) {
-    console.error("[payment_cycles] ensure failed", error?.message);
+    logPaymentCyclesError("ensure failed", error?.message);
     return null;
   }
   return mapCycle(inserted);
@@ -375,7 +395,7 @@ export async function confirmPaymentCycle(input: {
     .select("id")
     .single();
   if (nextError) {
-    console.error("[payment_cycles] next cycle failed", nextError.message);
+    logPaymentCyclesError("next cycle failed", nextError.message);
   }
   return { ok: true, nextCycleId: nextCycle?.id ?? null };
 }
@@ -394,7 +414,7 @@ export async function getOpenPaymentCycles(input: {
   if (input.userId) query = query.eq("user_id", input.userId);
   const { data, error } = await query;
   if (error) {
-    console.error("[payment_cycles] list failed", error.message);
+    logPaymentCyclesError("list failed", error.message);
     return [];
   }
   return (data ?? []).map(mapCycle);
