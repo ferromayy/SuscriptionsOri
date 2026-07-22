@@ -38,6 +38,17 @@ body {
   }
 }
 
+@keyframes ori-join-fade {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @layer components {
   .ori-card {
     @apply rounded-2xl border border-gray-200 bg-gray-50 p-6;
@@ -125,21 +136,39 @@ body {
     @apply border-gray-900 bg-gray-50;
   }
 
-  /* Join page — Orí landing–inspired plan cards */
+  /* Join page — Orí landing–inspired plan cards (no translate: avoids layout jump) */
   .ori-plan-card {
-    @apply relative flex min-h-[20rem] flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white p-7 text-left shadow-sm transition-all duration-300 ease-out sm:p-8;
+    @apply relative flex min-h-[18rem] flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white p-7 text-left shadow-sm transition-[border-color,box-shadow,opacity] duration-300 ease-out sm:p-8;
   }
 
   .ori-plan-card:not(.ori-plan-card-selected):not(.ori-plan-card-dimmed):hover {
-    @apply -translate-y-1.5 shadow-xl;
+    @apply border-gray-300 shadow-md;
   }
 
   .ori-plan-card-selected {
-    @apply -translate-y-1 border-gray-900 shadow-xl ring-1 ring-gray-900;
+    @apply border-gray-900 shadow-lg ring-1 ring-gray-900;
   }
 
   .ori-plan-card-dimmed {
     @apply opacity-45 hover:opacity-80;
+  }
+
+  .ori-join-flow {
+    @apply scroll-mt-6;
+  }
+
+  .ori-join-panel {
+    @apply rounded-2xl border border-gray-200/80 bg-white p-6 shadow-sm sm:p-8;
+  }
+
+  .ori-join-step-enter {
+    animation: ori-join-fade 0.28s ease-out;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ori-join-step-enter {
+      animation: none;
+    }
   }
 
   .ori-plan-accent {

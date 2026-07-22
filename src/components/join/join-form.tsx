@@ -1,6 +1,12 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import {
+  useActionState,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import {
   signInAndJoinAsSubscriber,
@@ -155,6 +161,7 @@ export function JoinForm({
   paymentOptions,
   variant = "public",
   layout = "default",
+  onCheckoutActiveChange,
 }: {
   tenantSlug: string;
   plans: PublicPlan[];
@@ -163,8 +170,11 @@ export function JoinForm({
   variant?: "public" | "manager";
   /** Marketing layout: wider plan grid inspired by Orí landing. */
   layout?: "default" | "marketing";
+  /** Notify parent when the user leaves the plan browser (focus checkout). */
+  onCheckoutActiveChange?: (active: boolean) => void;
 }) {
   const isManager = variant === "manager";
+  const flowRef = useRef<HTMLDivElement>(null);
   const [authMode, setAuthMode] = useState<AuthMode>("signup");
   const [step, setStep] = useState<CheckoutStep>("plan");
   const [selectedPlanId, setSelectedPlanId] = useState("");
@@ -295,10 +305,24 @@ export function JoinForm({
     );
   }
 
+  function goToStep(next: CheckoutStep) {
+    setStep(next);
+    requestAnimationFrame(() => {
+      flowRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
+  useEffect(() => {
+    onCheckoutActiveChange?.(step !== "plan");
+  }, [step, onCheckoutActiveChange]);
+
   function handlePlanChange(planId: string) {
     setSelectedPlanId(planId);
     setSelectedOptions({});
     setTextValues({});
+    requestAnimationFrame(() => {
+      flowRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   }
 
   function updateDeliveryDetail(key: string, value: string) {
@@ -318,22 +342,32 @@ export function JoinForm({
     ["account", "Cuenta"],
   ] as const;
   // Until a plan is picked, only show the first step to keep the screen clean.
-  const visibleSteps = selectedPlanId ? allSteps : allSteps.slice(0, 1);
+  const visibleSteps = selectedPlanId || step !== "plan" ? allSteps : allSteps.slice(0, 1);
   const currentStepIndex = allSteps.findIndex(([key]) => key === step);
   const isMarketing = layout === "marketing";
+  const inCheckoutSteps = step !== "plan";
   const planGridClass =
-    plans.length === 1
-      ? "mx-auto grid w-full max-w-lg gap-6"
+    plans.length === 1 || Boolean(selectedPlanId)
+      ? "mx-auto grid w-full max-w-lg gap-5"
       : plans.length === 2
         ? "mx-auto grid w-full max-w-4xl gap-6 sm:grid-cols-2"
         : plans.length === 3
           ? "mx-auto grid w-full gap-6 sm:grid-cols-2 lg:grid-cols-3"
           : "mx-auto grid w-full gap-6 sm:grid-cols-2 lg:grid-cols-4";
+  const plansToShow =
+    step === "plan" && selectedPlanId
+      ? plans.filter((plan) => plan.id === selectedPlanId)
+      : plans;
 
   return (
-    <div className={isMarketing && step !== "plan" ? "mx-auto max-w-xl" : undefined}>
-      {(selectedPlanId || !isMarketing) && (
-        <ol className="mb-8 flex flex-wrap items-center justify-center gap-x-1 gap-y-2">
+    <div
+      ref={flowRef}
+      className={`ori-join-flow ${
+        isMarketing && inCheckoutSteps ? "mx-auto w-full max-w-xl" : "w-full"
+      }`}
+    >
+      {(selectedPlanId || !isMarketing || inCheckoutSteps) && (
+        <ol className="mb-6 flex flex-wrap items-center justify-center gap-x-1 gap-y-2 sm:mb-8">
           {visibleSteps.map(([key, label], index) => {
             const isCurrent = step === key;
             const isDone = index < currentStepIndex;
@@ -341,14 +375,14 @@ export function JoinForm({
               <li key={key} className="flex items-center">
                 {index > 0 && (
                   <span
-                    className={`mx-1 h-px w-4 sm:w-6 ${
+                    className={`mx-1 h-px w-3 sm:w-5 ${
                       isDone || isCurrent ? "bg-gray-900" : "bg-gray-200"
                     }`}
                     aria-hidden
                   />
                 )}
                 <span
-                  className={`flex items-center gap-2 rounded-full py-1 pl-1 pr-3 text-xs transition ${
+                  className={`flex items-center gap-1.5 rounded-full py-1 pl-1 pr-2.5 text-[0.7rem] transition sm:gap-2 sm:pr-3 sm:text-xs ${
                     isCurrent
                       ? "bg-gray-900 text-white shadow-sm"
                       : isDone
@@ -367,7 +401,9 @@ export function JoinForm({
                   >
                     {isDone ? "✓" : index + 1}
                   </span>
-                  <span className={isCurrent ? "font-medium" : ""}>{label}</span>
+                  <span className={isCurrent ? "font-medium" : "hidden sm:inline"}>
+                    {label}
+                  </span>
                 </span>
               </li>
             );
@@ -375,14 +411,59 @@ export function JoinForm({
         </ol>
       )}
 
+      {inCheckoutSteps && selectedPlan && (
+        <div className="mb-5 flex items-center justify-between gap-3 rounded-xl border border-gray-200/80 bg-white px-4 py-3 shadow-sm">
+          <div className="min-w-0">
+            <p className="ori-section-label">Experiencia elegida</p>
+            <p className="mt-1 truncate text-sm font-semibold text-gray-900">
+              {selectedPlan.name}
+            </p>
+            <p className="text-xs text-gray-500">
+              {formatCents(livePrice, selectedPlan.currency, billingCycleDays)}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => goToStep("plan")}
+            className="shrink-0 text-xs font-medium text-gray-600 underline-offset-4 hover:text-gray-900 hover:underline"
+          >
+            Cambiar
+          </button>
+        </div>
+      )}
+
       {step === "plan" && (
-        <>
+        <div className="ori-join-step-enter">
+          {selectedPlanId && plans.length > 1 && (
+            <div className="mb-5 flex flex-wrap justify-center gap-2">
+              {plans.map((plan) => {
+                const active = plan.id === selectedPlanId;
+                return (
+                  <button
+                    key={plan.id}
+                    type="button"
+                    onClick={() => handlePlanChange(plan.id)}
+                    className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                      active
+                        ? "bg-gray-900 text-white"
+                        : "bg-white text-gray-600 ring-1 ring-gray-200 hover:ring-gray-400"
+                    }`}
+                  >
+                    {plan.name}
+                  </button>
+                );
+              })}
+            </div>
+          )}
           <fieldset>
             <legend className="sr-only">Elegí tu experiencia</legend>
             <div className={planGridClass}>
-              {plans.map((plan, index) => {
+              {plansToShow.map((plan, index) => {
                 const selected = selectedPlanId === plan.id;
-                const accent = PLAN_ACCENTS[index % PLAN_ACCENTS.length];
+                const accent =
+                  PLAN_ACCENTS[
+                    plans.findIndex((p) => p.id === plan.id) % PLAN_ACCENTS.length
+                  ] ?? PLAN_ACCENTS[index % PLAN_ACCENTS.length];
                 const planIsReady =
                   selected &&
                   (plan.fields.length === 0 || fieldsComplete);
@@ -390,11 +471,7 @@ export function JoinForm({
                   <div
                     key={plan.id}
                     className={`ori-plan-card ${
-                      selected
-                        ? "ori-plan-card-selected"
-                        : selectedPlanId
-                          ? "ori-plan-card-dimmed"
-                          : ""
+                      selected ? "ori-plan-card-selected" : ""
                     }`}
                   >
                     <label className="flex flex-1 cursor-pointer flex-col">
@@ -504,7 +581,7 @@ export function JoinForm({
                             )}
                             <button
                               type="button"
-                              onClick={() => setStep("contact")}
+                              onClick={() => goToStep("contact")}
                               className="ori-btn-primary mt-2 w-full"
                             >
                               Continuar
@@ -524,11 +601,11 @@ export function JoinForm({
               Elegí una experiencia para continuar.
             </p>
           )}
-        </>
+        </div>
       )}
 
       {step === "contact" && (
-        <section className="space-y-4">
+        <section className="ori-join-panel ori-join-step-enter space-y-4">
           <h2 className="text-lg font-medium text-gray-900">Datos de contacto</h2>
           <div>
             <label htmlFor="contactEmail" className="block text-sm text-gray-700">
@@ -607,15 +684,15 @@ export function JoinForm({
             />
           </div>
           <StepNav
-            onBack={() => setStep("plan")}
-            onNext={() => setStep("delivery")}
+            onBack={() => goToStep("plan")}
+            onNext={() => goToStep("delivery")}
             nextDisabled={!contactComplete}
           />
         </section>
       )}
 
       {step === "delivery" && (
-        <section className="space-y-4">
+        <section className="ori-join-panel ori-join-step-enter space-y-4">
           <h2 className="text-lg font-medium text-gray-900">Método de entrega</h2>
           <div className="space-y-3">
             {(
@@ -747,15 +824,15 @@ export function JoinForm({
           )}
 
           <StepNav
-            onBack={() => setStep("contact")}
-            onNext={() => setStep("payment")}
+            onBack={() => goToStep("contact")}
+            onNext={() => goToStep("payment")}
             nextDisabled={!deliveryComplete}
           />
         </section>
       )}
 
       {step === "payment" && (
-        <section className="space-y-4">
+        <section className="ori-join-panel ori-join-step-enter space-y-4">
           <h2 className="text-lg font-medium text-gray-900">Pago</h2>
           {selectedPlan && (
             <p className="text-sm text-gray-600">
@@ -917,15 +994,15 @@ export function JoinForm({
           )}
 
           <StepNav
-            onBack={() => setStep("delivery")}
-            onNext={() => setStep("account")}
+            onBack={() => goToStep("delivery")}
+            onNext={() => goToStep("account")}
             nextDisabled={!paymentComplete}
           />
         </section>
       )}
 
       {step === "account" && checkoutPayload && (
-        <>
+        <div className="ori-join-panel ori-join-step-enter">
           <div className="mb-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
             <p>
               {firstName} {lastName} · {email} · {phone}
@@ -1086,12 +1163,12 @@ export function JoinForm({
 
           <button
             type="button"
-            onClick={() => setStep("payment")}
+            onClick={() => goToStep("payment")}
             className="ori-btn-secondary mt-4 w-full"
           >
             Anterior
           </button>
-        </>
+        </div>
       )}
 
       {error && (
@@ -1173,7 +1250,7 @@ function StepNav({
   nextDisabled: boolean;
 }) {
   return (
-    <div className="flex flex-wrap gap-3 pt-2">
+    <div className="mt-2 flex items-center justify-between gap-3 border-t border-gray-100 pt-5">
       <button type="button" onClick={onBack} className="ori-btn-secondary">
         Anterior
       </button>
